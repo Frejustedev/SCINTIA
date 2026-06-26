@@ -17,13 +17,12 @@ Suit [`docs/06_ROADMAP.md`](docs/06_ROADMAP.md). Une phase à la fois.
 - [x] Outillage qualité : ruff/black, eslint/prettier, pre-commit, `.gitignore`, `.env.example`.
 - [x] `README.md`, `DECISIONS.md`, `TODO.md`.
 - [x] Test backend `/health`.
-- [ ] **À faire en ligne (réseau requis) :**
-  - [ ] `git push -u origin main` vers `https://github.com/Frejustedev/SCINTIA.git`.
-  - [ ] `docker compose up --build` → vérifier les 4 services + `GET /health` = 200.
-  - [ ] `cd backend && pip install -e ".[dev]" && pytest` (vert).
-  - [ ] `cd frontend && npm install && npm run build && npm run lint` (vert).
-  - [ ] Générer + committer le lockfile front (`package-lock.json`) puis passer à `npm ci`.
-  - [ ] `pre-commit install` et lancer `pre-commit run --all-files`.
+- [x] `git push -u origin main` vers `https://github.com/Frejustedev/SCINTIA.git` (poussé, vérifié).
+- [x] `backend` : `pip install -e ".[dev]"` + `pytest` (2 passés) + `ruff`/`black`/`mypy` verts.
+- [x] `frontend` : `npm install` + `npm run build` + `npm run lint` verts ; `package-lock.json` commité ; Dockerfile en `npm ci`.
+- [ ] **Reste à vérifier (démon Docker requis) :**
+  - [ ] Démarrer Docker Desktop, puis `docker compose up --build` → 4 services + `GET /health` = 200 + page sur http://localhost:3000.
+  - [ ] `pre-commit install` puis `pre-commit run --all-files`.
 
 ## Phase 1 — MVP (1 examen de bout en bout)
 

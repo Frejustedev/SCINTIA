@@ -4,9 +4,8 @@ WORKDIR /app
 
 # ── Dependencies ──
 FROM base AS deps
-COPY package.json ./
-# No lockfile committed yet; generate one locally and switch to `npm ci` later.
-RUN npm install
+COPY package.json package-lock.json ./
+RUN npm ci
 
 # ── Build ──
 FROM base AS build
