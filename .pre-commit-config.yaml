@@ -1,0 +1,47 @@
+# Pre-commit hooks. Install once (network required): `pip install pre-commit && pre-commit install`.
+# Backend: ruff (lint) + black (format). Frontend: prettier (format).
+# A local hook hard-blocks committing DICOM / patient data.
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-merge-conflict
+      - id: detect-private-key
+      - id: check-added-large-files
+        args: ["--maxkb=2048"]
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.4
+    hooks:
+      - id: ruff
+        args: ["--fix"]
+        files: ^backend/
+
+  - repo: https://github.com/psf/black
+    rev: 24.10.0
+    hooks:
+      - id: black
+        files: ^backend/
+
+  - repo: https://github.com/pre-commit/mirrors-prettier
+    rev: v4.0.0-alpha.8
+    hooks:
+      - id: prettier
+        files: ^frontend/.*\.(ts|tsx|js|jsx|json|css|md)$
+        additional_dependencies:
+          - prettier@3.3.3
+          - prettier-plugin-tailwindcss@0.6.8
+
+  - repo: local
+    hooks:
+      - id: forbid-dicom
+        name: forbid committing DICOM / patient data
+        # Content-aware: catches extensionless DICOM and vendor formats, not just
+        # known extensions (real SPECT/CT exports are often extensionless).
+        entry: python scripts/check_no_dicom.py
+        language: system
+        pass_filenames: true

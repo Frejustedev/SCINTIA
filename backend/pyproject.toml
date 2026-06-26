@@ -1,0 +1,69 @@
+[project]
+name = "scintia-backend"
+version = "0.0.0"
+description = "Scintia / cintiAI — decision-support backend for nuclear medicine (FastAPI)."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "UNLICENSED" }
+
+# Runtime dependencies. Pinned to compatible releases; refine when the lockfile
+# is generated (network required). Phase 0 only needs FastAPI + config; the rest
+# are declared now so the modular skeleton imports cleanly in later phases.
+dependencies = [
+    "fastapi>=0.115,<1.0",
+    "uvicorn[standard]>=0.30,<1.0",
+    "pydantic>=2.8,<3.0",
+    "pydantic-settings>=2.4,<3.0",
+    "sqlalchemy>=2.0,<3.0",
+    "psycopg[binary]>=3.2,<4.0",
+    "celery>=5.4,<6.0",
+    "redis>=5.0,<6.0",
+    "python-multipart>=0.0.12",
+    # AI report drafting (not wired in Phase 0).
+    "anthropic>=0.40,<1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0,<9.0",
+    "httpx>=0.27,<1.0",
+    "ruff>=0.6,<1.0",
+    "black>=24.0,<25.0",
+    "mypy>=1.11,<2.0",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+# ── Ruff (lint) ──
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+src = ["app", "tests"]
+
+[tool.ruff.lint]
+# pycodestyle, pyflakes, isort, pyupgrade, bugbear, comprehensions.
+select = ["E", "F", "I", "UP", "B", "C4"]
+ignore = []
+
+# ── Black (format) ──
+[tool.black]
+line-length = 100
+target-version = ["py310", "py311", "py312"]
+
+# ── Pytest ──
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra -q"
+pythonpath = ["."]
+
+# ── Mypy (strict typing per CLAUDE.md) ──
+[tool.mypy]
+python_version = "3.10"
+strict = true
+ignore_missing_imports = true
+plugins = ["pydantic.mypy"]

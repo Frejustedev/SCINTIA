@@ -1,0 +1,54 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Theme role tokens. Dark mode = default (reading room, docs/03_CHARTE).
+   Light mode (reports / PDF) flips values and shifts the primary action to
+   Iris #4B4DE0 for contrast.
+   ───────────────────────────────────────────────────────────────────────── */
+:root {
+  --color-bg: #0b0e15; /* ink-900 */
+  --color-surface: #161b26; /* ink-800 */
+  --color-border: #262e3d; /* ink-700 */
+  --color-text: #c4cbd6; /* ink-200 */
+  --color-muted: #6b7689; /* ink-400 */
+  --color-primary: #6e6fff; /* iris */
+}
+
+[data-theme="light"] {
+  --color-bg: #f5f7fb; /* paper */
+  --color-surface: #ffffff;
+  --color-border: #e7eaf0; /* ink-100 */
+  --color-text: #161b26; /* ink-800 */
+  --color-muted: #6b7689; /* ink-400 */
+  --color-primary: #4b4de0; /* iris (light) */
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-text);
+}
+
+/* Clinical values are always mono with tabular figures (charte §4). */
+.mono,
+.value {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Accessibility: cut ambient animations when requested. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
