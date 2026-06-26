@@ -6,6 +6,41 @@ Format : une décision = contexte court + choix + justification. Le plus récent
 
 ## Phase 0 — Socle
 
+### D-0.14 — « 10 modules » = les 10 étapes du pipeline
+**Contexte :** le prompt évoque « l'application complète à 10 modules ».
+**Choix :** interpréter « 10 modules » comme les **10 étapes du pipeline**
+(`02_ARCHITECTURE.md` §3 : Ingestion → Anonymisation → Séparation → Conversion →
+Segmentation → Recalage → Quantification → Dosimétrie → Analyse par examen →
+Compte-rendu).
+**Justification :** réconcilie le prompt et les specs sans rien inventer. Les
+autres regroupements restent distincts : **13 rubriques fonctionnelles A–M**
+(`01_SPECIFICATIONS.md`) et **6 analyseurs d'examen** (pattern stratégie).
+À confirmer avec le porteur si une autre lecture était visée.
+
+### D-0.13 — Licence : Apache-2.0
+**Choix :** publier le dépôt sous **Apache-2.0** (fichier `LICENSE` ajouté ;
+`backend/pyproject.toml` mis à jour).
+**Justification :** permissive **avec clause de brevet** (utile pour un logiciel
+médical/régulé), cohérente avec les dépendances (TotalSegmentator est Apache-2.0),
+compatible avec une éventuelle certification/commercialisation. Révisable avant
+toute contribution externe ; **revue juridique conseillée** avant usage clinique.
+
+### D-0.12 — Moteur de dosimétrie : MIRDcalc par défaut, derrière une abstraction
+**Choix :** **MIRDcalc** (gratuit, SNMMI, MIRD Pamphlet 28) comme moteur par
+défaut, exposé via une interface `DosimetryEngine` ; **OLINDA/EXM** branchable en
+option (licence). Ne **pas** réimplémenter les valeurs S.
+**Justification :** cohérent avec un prototype ouvert, abstraction pour les
+centres disposant d'OLINDA. **À valider par le radiophysicien** en Phase 2
+(exigence `06_ROADMAP.md`).
+
+### D-0.11 — Visualiseur DICOM : Cornerstone3D
+**Choix :** **Cornerstone3D** (`@cornerstonejs/core` + `@cornerstonejs/tools`),
+embarqué dans nos composants React, plutôt qu'OHIF.
+**Justification :** bibliothèque intégrable avec contrôle total de l'UI (charte,
+superposition de masques, défilement/fenêtrage/MIP) ; OHIF est une **application
+complète** (bâtie sur Cornerstone), plus lourde à personnaliser pour notre page
+résultats sur mesure. Révisable en Phase 1.
+
 ### D-0.10 — Dépôt Git indépendant dans `SCINTIA/`
 **Contexte :** `C:\Users\agbot\Desktop` est lui-même un dépôt Git (accidentel,
 remote `presidentdubenin.git`) ; les docs Scintia y étaient **non suivies**.
@@ -73,11 +108,9 @@ clés privées.
 
 ## Décisions à prendre (différées, hors Phase 0)
 
-- **Visualiseur DICOM** : Cornerstone.js vs OHIF (Phase 1).
-- **Moteur de dosimétrie** : MIRDcalc vs OLINDA/EXM (Phase 2).
 - **Stockage objet** : volume local vs MinIO (Phase 1).
-- **Licence open-source** du dépôt.
-- **« 10 modules »** : clarifier le décompte (le corpus décrit 13 rubriques A–M
-  + 6 modules d'examen + un pipeline en 10 étapes).
 - **Statut réglementaire / circuit des données** : validation par un spécialiste
-  (RGPD / loi 18-07).
+  (RGPD / loi 18-07) — hors compétence logicielle.
+
+> Résolues le 2026-06-26 : visualiseur DICOM → D-0.11 ; moteur dosimétrie →
+> D-0.12 ; licence → D-0.13 ; « 10 modules » → D-0.14.

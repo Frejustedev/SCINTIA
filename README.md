@@ -106,5 +106,6 @@ faire dans [`TODO.md`](TODO.md).
 
 ## Licence
 
-À définir (le projet est destiné à être open-source — cf. charte). En attendant,
-tous droits réservés.
+**Apache-2.0** (voir [`LICENSE`](LICENSE)) — permissive avec clause de brevet,
+adaptée à un logiciel médical open-source. Une revue juridique reste conseillée
+avant tout usage clinique ou commercial.

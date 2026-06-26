@@ -4,7 +4,7 @@ version = "0.0.0"
 description = "Scintia / cintiAI — decision-support backend for nuclear medicine (FastAPI)."
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "UNLICENSED" }
+license = { text = "Apache-2.0" }
 
 # Runtime dependencies. Pinned to compatible releases; refine when the lockfile
 # is generated (network required). Phase 0 only needs FastAPI + config; the rest
