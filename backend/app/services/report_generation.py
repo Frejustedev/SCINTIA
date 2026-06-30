@@ -15,6 +15,7 @@ Neither generator ever receives a patient identifier.
 
 from __future__ import annotations
 
+import json
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any
@@ -136,24 +137,82 @@ class TemplateReportGenerator(ReportGenerator):
         return "\n".join(lines)
 
 
+# System prompt encoding the non-negotiables (docs/05, CLAUDE.md). It never sees a
+# patient identifier — only the anonymized ReportContext.
+_CLAUDE_SYSTEM_PROMPT = (
+    "Tu es un assistant de rédaction de comptes-rendus de médecine nucléaire.\n"
+    "RÈGLES ABSOLUES (non négociables) :\n"
+    "- Tu REFORMULES uniquement les données fournies. Tu n'inventes JAMAIS une mesure, "
+    "un score, un foyer ou un constat absent des données.\n"
+    "- Si une donnée manque, tu ne la complètes pas : indique qu'elle n'est pas disponible.\n"
+    "- Tu n'émets aucun diagnostic ni décision : tu produis un BROUILLON, relu et validé "
+    "par le médecin.\n"
+    "- Structure imposée : INDICATION / TECHNIQUE / RÉSULTATS / CONCLUSION.\n"
+    "- Tout score marqué « à valider » / proxy doit être présenté comme tel, jamais comme "
+    "la métrique validée.\n"
+    "- Réponds en français, ton clinique et sobre. Ne reproduis aucun identifiant patient."
+)
+
+
+def _build_client(api_key: str) -> Any:
+    """Construct the Anthropic client (lazy import; zero-retention is an org setting)."""
+    import anthropic
+
+    return anthropic.Anthropic(api_key=api_key)
+
+
+def _context_to_payload(context: ReportContext) -> str:
+    data = {
+        "exam_type": context.exam_type,
+        "pseudonyme": context.pseudonym,
+        "organes": [
+            {"nom": o.organ_name, "volume_ml": o.volume_ml, "corrige": o.corrected}
+            for o in context.organs
+        ],
+        "score": {
+            "type": context.score_type,
+            "valeur": context.score_value,
+            "details": context.score_details,
+        },
+        "foyers": [
+            {"localisation": f.anatomical_ref, "ratio": f.ratio, "taille_mm": f.size_mm}
+            for f in context.foci
+        ],
+    }
+    return (
+        "Données structurées anonymisées de l'examen (n'ajoute rien en dehors de "
+        "ces données) :\n\n"
+        + json.dumps(data, ensure_ascii=False, indent=2)
+        + "\n\nRédige le brouillon de compte-rendu structuré (INDICATION / TECHNIQUE / "
+        "RÉSULTATS / CONCLUSION) à partir de ces seules données."
+    )
+
+
 class ClaudeReportGenerator(ReportGenerator):
-    """Claude adapter (zero-retention). Requires ANTHROPIC_API_KEY; not used offline."""
+    """Claude adapter. Requires ANTHROPIC_API_KEY; enable zero-retention on the org."""
 
     model_version = "claude-opus-4-8"
 
-    def generate(self, context: ReportContext) -> str:  # pragma: no cover
+    def generate(self, context: ReportContext) -> str:
         from app.core.config import get_settings
 
         api_key = get_settings().anthropic_api_key
         if not api_key:
             raise RuntimeError("ANTHROPIC_API_KEY non configurée.")
-        # Real call wiring: send the anonymized ReportContext as structured input with
-        # the docs/08 system prompt, zero-retention enabled, guardrails (reformulate
-        # only — never invent). Implemented for the deployment with a key.
-        raise NotImplementedError(
-            "Claude report generation runs with a configured API key and zero-retention; "
-            "offline default is TemplateReportGenerator."
+
+        client = _build_client(api_key)
+        response = client.messages.create(
+            model=self.model_version,
+            max_tokens=8192,
+            thinking={"type": "adaptive"},
+            system=_CLAUDE_SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": _context_to_payload(context)}],
         )
+        if getattr(response, "stop_reason", None) == "refusal":
+            raise RuntimeError("Génération de compte-rendu refusée par le modèle (sécurité).")
+        return "".join(
+            block.text for block in response.content if getattr(block, "type", None) == "text"
+        ).strip()
 
 
 def get_report_generator() -> ReportGenerator:
