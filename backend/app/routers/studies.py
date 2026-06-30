@@ -9,7 +9,7 @@ from __future__ import annotations
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -18,7 +18,10 @@ from app.core.config import get_settings
 from app.core.db import get_db
 from app.core.security import CurrentUser
 from app.models.study import Study
+from app.schemas.ingestion import IngestionSummary
 from app.schemas.study import StudyCreate, StudyRead
+from app.services.ingestion import ingest_study
+from app.services.storage import ObjectStorage, get_storage
 from app.services.studies import create_study
 
 router = APIRouter(prefix="/studies", tags=["studies"])
@@ -88,3 +91,40 @@ def get_study(
     if study is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Examen introuvable.")
     return _to_read(study)
+
+
+@router.post("/{study_id}/files", response_model=IngestionSummary)
+async def upload_files(
+    study_id: uuid.UUID,
+    files: list[UploadFile],
+    db: Annotated[Session, Depends(get_db)],
+    current_user: CurrentUser,
+    storage: Annotated[ObjectStorage, Depends(get_storage)],
+) -> IngestionSummary:
+    """Upload DICOM files: they are de-identified and separated CT/SPECT, then stored."""
+    study = db.get(Study, study_id)
+    if study is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Examen introuvable.")
+    blobs = [await file.read() for file in files]
+    key = get_settings().identity_encryption_key or ""
+    result = ingest_study(db, storage, study=study, blobs=blobs, identity_key=key)
+    record_audit(
+        db,
+        action="study.upload",
+        user_id=current_user.id,
+        study_id=study.id,
+        details={
+            "ct_series": result.ct_series,
+            "spect_series": result.spect_series,
+            "instances": result.instances,
+            "skipped": result.skipped,
+        },
+    )
+    return IngestionSummary(
+        study_id=study.id,
+        status=study.status,
+        ct_series=result.ct_series,
+        spect_series=result.spect_series,
+        instances=result.instances,
+        skipped=result.skipped,
+    )

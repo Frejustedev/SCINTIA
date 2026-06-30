@@ -55,6 +55,17 @@ def client(db_session: Session) -> Iterator[TestClient]:
     app.dependency_overrides.clear()
 
 
+@pytest.fixture
+def object_storage(tmp_path, client: TestClient):  # type: ignore[no-untyped-def]
+    """Override the app's object storage with a temp-dir local store."""
+    from app.main import app
+    from app.services.storage import LocalObjectStorage, get_storage
+
+    storage = LocalObjectStorage(tmp_path / "objects")
+    app.dependency_overrides[get_storage] = lambda: storage
+    return storage
+
+
 def bootstrap_and_login(
     client: TestClient,
     *,

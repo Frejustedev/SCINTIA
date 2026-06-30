@@ -35,7 +35,7 @@ Suit [`docs/06_ROADMAP.md`](docs/06_ROADMAP.md). Une phase à la fois.
 - [x] Routers : `auth` (login/me), `users` (bootstrap-admin/CRUD admin), `studies` (create/list/get) + tests d'intégration.
 - [ ] Worker Celery (broker/result) + tâche pipeline + machine à états `study.status` *(câblé en 1.1 avec l'ingestion)*.
 
-**1.1 Ingestion** — upload (dossier/ZIP/DICOMDIR), parse pydicom, anonymise, **tri CT/SPECT**, DICOM→NIfTI.
+**1.1 Ingestion** — [x] upload multi-fichiers, parse pydicom, **anonymisation avant stockage**, **tri CT/SPECT** (par Modality), stockage objet par série + tests. [ ] reste : extraction ZIP/DICOMDIR, conversion DICOM→NIfTI (faite en 1.2 pour la segmentation), passage en tâche Celery.
 **1.2 Segmentation** — TotalSegmentator (worker, GPU), volumes mL, **édition manuelle des masques**, visualiseur Cornerstone3D.
 **1.3 Quantification + analyseur osseux** — recalage rigide, counts→activité, ratios, détection de foyers + **BSI** (`BoneScanAnalyzer`).
 **1.4 Compte-rendu** — contexte anonymisé → **Claude (zéro-rétention)** via [`docs/08_`](docs/08_PROMPT_CR_SCINTI_OSSEUSE.md), bandeau non supprimable, éditeur, validation/signature, **export PDF** (ré-id locale).
