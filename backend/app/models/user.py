@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import String
+from sqlalchemy import Boolean, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models._types import TimestampMixin, pg_enum
@@ -21,3 +21,6 @@ class User(TimestampMixin, Base):
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     full_name: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[Role] = mapped_column(pg_enum(Role, "role"), nullable=False)
+    # Optional TOTP MFA (app.core.mfa). The secret is only used to verify codes.
+    mfa_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    totp_secret: Mapped[str | None] = mapped_column(String(64))

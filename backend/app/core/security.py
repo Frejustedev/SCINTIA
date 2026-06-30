@@ -51,8 +51,22 @@ def create_access_token(*, subject: str, role: str) -> str:
     payload: dict[str, Any] = {
         "sub": subject,
         "role": role,
+        "type": "access",
         "iat": now,
         "exp": now + timedelta(minutes=settings.access_token_expire_minutes),
+    }
+    return jwt.encode(payload, _secret(), algorithm=settings.jwt_algorithm)
+
+
+def create_refresh_token(*, subject: str) -> str:
+    """A long-lived refresh token; exchanged for a new access token at /auth/refresh."""
+    settings = get_settings()
+    now = datetime.now(timezone.utc)
+    payload: dict[str, Any] = {
+        "sub": subject,
+        "type": "refresh",
+        "iat": now,
+        "exp": now + timedelta(minutes=settings.refresh_token_expire_minutes),
     }
     return jwt.encode(payload, _secret(), algorithm=settings.jwt_algorithm)
 
@@ -75,6 +89,9 @@ def get_current_user(
     db: Annotated[Session, Depends(get_db)],
 ) -> User:
     payload = decode_token(token)
+    if payload.get("type") == "refresh":
+        # A refresh token must never be accepted as an access credential.
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Jeton invalide.")
     subject = payload.get("sub")
     if not subject:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Jeton invalide.")

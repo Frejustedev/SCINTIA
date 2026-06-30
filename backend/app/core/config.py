@@ -36,6 +36,11 @@ class Settings(BaseSettings):
     # ── Auth ──
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 720  # 12 h
+    refresh_token_expire_minutes: int = 60 * 24 * 7  # 7 days
+    login_rate_limit_per_minute: int = 30  # per client IP; 0 disables
+
+    # ── HTTP hardening ──
+    enable_hsts: bool = False  # set true behind the production TLS proxy
 
     # ── Object storage (local volume by default; MinIO later) ──
     storage_dir: str = "data/objects"

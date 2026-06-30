@@ -11,6 +11,16 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 
+@pytest.fixture(autouse=True)
+def _reset_login_limiter() -> Iterator[None]:
+    """Keep the in-memory login limiter isolated between tests."""
+    from app.core.ratelimit import login_limiter
+
+    login_limiter.clear()
+    yield
+    login_limiter.clear()
+
+
 @pytest.fixture
 def db_session(tmp_path, monkeypatch: MonkeyPatch) -> Iterator[Session]:
     monkeypatch.setenv("SECRET_KEY", "test-secret-key-0123456789-abcdefghijklmnop")

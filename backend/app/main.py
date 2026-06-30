@@ -13,6 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app import __version__
 from app.core.config import get_settings
 from app.core.logging import configure_logging, get_logger
+from app.core.middleware import SecurityHeadersMiddleware
 from app.routers.api import api_router
 from app.routers.health import router as health_router
 
@@ -32,6 +33,7 @@ def create_app() -> FastAPI:
         ),
     )
 
+    app.add_middleware(SecurityHeadersMiddleware, hsts=settings.enable_hsts)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,

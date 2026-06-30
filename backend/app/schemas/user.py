@@ -24,4 +24,5 @@ class UserRead(BaseModel):
     email: EmailStr
     full_name: str
     role: Role
+    mfa_enabled: bool = False
     created_at: datetime
