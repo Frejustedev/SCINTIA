@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import uuid
+import zipfile
 
 import numpy as np
 import pydicom
@@ -125,3 +126,35 @@ def test_upload_with_no_valid_dicom_marks_error(
 
     study = db_session.get(Study, uuid.UUID(study_id))
     assert study is not None and study.error_message is not None
+
+
+def test_upload_zip_archive_is_expanded(
+    client: TestClient, db_session: Session, object_storage: object
+) -> None:
+    from app.models.study import StudySeries
+
+    headers = bootstrap_and_login(client)
+    study_id = client.post("/api/v1/studies", headers=headers, json={"exam_type": "bone"}).json()[
+        "id"
+    ]
+
+    study_uid = generate_uid()
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        archive.writestr(
+            "ct/0.dcm", _dicom_bytes(modality="CT", study_uid=study_uid, series_uid=generate_uid())
+        )
+        archive.writestr(
+            "nm/0.dcm", _dicom_bytes(modality="NM", study_uid=study_uid, series_uid=generate_uid())
+        )
+        archive.writestr("readme.txt", b"not a dicom file")
+
+    files = [("files", ("export.zip", buffer.getvalue(), "application/zip"))]
+    summary = client.post(f"/api/v1/studies/{study_id}/files", headers=headers, files=files).json()
+    assert summary["ct_series"] == 1
+    assert summary["spect_series"] == 1
+    assert summary["instances"] == 2
+    assert summary["skipped"] == 1  # the readme
+
+    series = db_session.query(StudySeries).filter_by(study_id=uuid.UUID(study_id)).all()
+    assert {s.kind.value for s in series} == {"ct", "spect"}

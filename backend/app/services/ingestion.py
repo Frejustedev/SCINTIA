@@ -9,6 +9,7 @@ classified as CT or SPECT from the DICOM Modality.
 from __future__ import annotations
 
 import io
+import zipfile
 from collections import defaultdict
 from dataclasses import dataclass
 
@@ -55,6 +56,31 @@ def read_dataset(blob: bytes) -> Dataset | None:
         return None
 
 
+_ZIP_MAGIC = b"PK\x03\x04"
+
+
+def expand_archives(blobs: list[bytes]) -> list[bytes]:
+    """Flatten ZIP archives into their member blobs (folder/ZIP/DICOMDIR uploads).
+
+    Non-archive blobs pass through unchanged. A DICOMDIR index file inside the set
+    parses as DICOM but has no Modality, so it is harmlessly skipped downstream.
+    """
+    expanded: list[bytes] = []
+    for blob in blobs:
+        if blob[:4] != _ZIP_MAGIC:
+            expanded.append(blob)
+            continue
+        try:
+            with zipfile.ZipFile(io.BytesIO(blob)) as archive:
+                for name in archive.namelist():
+                    if name.endswith("/"):
+                        continue
+                    expanded.append(archive.read(name))
+        except (zipfile.BadZipFile, OSError):
+            expanded.append(blob)
+    return expanded
+
+
 def _to_bytes(ds: Dataset) -> bytes:
     buffer = io.BytesIO()
     ds.save_as(buffer, enforce_file_format=True)
@@ -93,7 +119,7 @@ def ingest_study(
 
     result = IngestionResult()
     datasets: list[Dataset] = []
-    for blob in blobs:
+    for blob in expand_archives(blobs):
         ds = read_dataset(blob)
         if ds is None:
             result.skipped += 1

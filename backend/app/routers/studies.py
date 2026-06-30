@@ -225,6 +225,18 @@ def analyze(
             status_code=status.HTTP_409_CONFLICT,
             detail="Aucune série CT — chargez d'abord les fichiers DICOM.",
         )
+
+    # Production path: enqueue the pipeline on Celery so GPU work runs off-request.
+    if get_settings().celery_broker_url:
+        from app.workers.tasks import run_pipeline_task
+
+        run_pipeline_task.delay(str(study_id))
+        record_audit(
+            db, action="study.analyze.enqueued", user_id=current_user.id, study_id=study_id
+        )
+        return _to_read(study)
+
+    # Offline / no broker: run synchronously.
     try:
         run_pipeline(
             db,
