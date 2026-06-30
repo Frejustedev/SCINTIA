@@ -37,14 +37,14 @@ def prior_studies(db: Session, *, study: Study, viewer: User | None = None) -> l
     is allowed to see (RBAC scoping). Omit ``viewer`` for server-side report drafting.
     """
     stmt = (
-        select(Study)
-        .where(
+        select(Study).where(
             Study.patient_id == study.patient_id,
             Study.exam_type == study.exam_type,
             Study.id != study.id,
-            Study.created_at <= study.created_at,
+            Study.created_at < study.created_at,  # strictly earlier (matches the contract)
         )
-        .order_by(Study.created_at.asc())
+        # Secondary key keeps ordering deterministic if timestamps ever tie.
+        .order_by(Study.created_at.asc(), Study.id.asc())
     )
     if viewer is not None:
         stmt = stmt.where(study_visibility_clause(viewer))
