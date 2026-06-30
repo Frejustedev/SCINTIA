@@ -24,16 +24,24 @@ Suit [`docs/06_ROADMAP.md`](docs/06_ROADMAP.md). Une phase à la fois.
   - [ ] Démarrer Docker Desktop, puis `docker compose up --build` → 4 services + `GET /health` = 200 + page sur http://localhost:3000.
   - [ ] `pre-commit install` puis `pre-commit run --all-files`.
 
-## Phase 1 — MVP (1 examen de bout en bout)
+## Phase 1 — MVP scintigraphie osseuse (BSI)
 
-- [ ] Ingestion DICOM (dossier / ZIP / DICOMDIR) + file d'attente (Celery worker).
-- [ ] **Anonymisation / dé-identification** (PS3.15) + table `patient_identities` chiffrée.
-- [ ] Tri CT/SPECT + conversion NIfTI.
-- [ ] Modèle de données SQLAlchemy (15 tables) + migrations + journal d'audit.
-- [ ] Segmentation TotalSegmentator + volumes + **édition manuelle des masques**.
-- [ ] Quantification SPECT basique + un examen (Octréotide/Krenning ou osseuse).
-- [ ] Génération de CR (Claude, contexte anonymisé) + éditeur + validation + export PDF.
-- [ ] Visualiseur DICOM (Cornerstone.js ou OHIF) + auth/RBAC (4 rôles).
+**1.0 Fondations** (sécurité d'abord)
+- [x] Modèle de données SQLAlchemy (15 tables) + enums centralisés.
+- [x] Session DB + scaffold Alembic (migration auto-générée au 1er run Postgres).
+- [x] **Service d'anonymisation DICOM** (PS3.15 : PHI, dates décalées, UID remappés, tags privés) + crypto identité (Fernet) + tests de sécurité.
+- [ ] Auth/RBAC (argon2 + JWT, 4 rôles) + writer de journal d'audit append-only.
+- [ ] Abstraction stockage objet (volume local) + cycle de vie des DICOM bruts.
+- [ ] Worker Celery (broker/result) + tâche pipeline + machine à états `study.status`.
+- [ ] Routers : auth, studies (création/upload).
+
+**1.1 Ingestion** — upload (dossier/ZIP/DICOMDIR), parse pydicom, anonymise, **tri CT/SPECT**, DICOM→NIfTI.
+**1.2 Segmentation** — TotalSegmentator (worker, GPU), volumes mL, **édition manuelle des masques**, visualiseur Cornerstone3D.
+**1.3 Quantification + analyseur osseux** — recalage rigide, counts→activité, ratios, détection de foyers + **BSI** (`BoneScanAnalyzer`).
+**1.4 Compte-rendu** — contexte anonymisé → **Claude (zéro-rétention)** via [`docs/08_`](docs/08_PROMPT_CR_SCINTI_OSSEUSE.md), bandeau non supprimable, éditeur, validation/signature, **export PDF** (ré-id locale).
+**1.5 Chaînage E2E** — pipeline Celery + progression WebSocket + page résultats + démo DoD.
+
+> **À valider en conditions réelles (côté porteur)** : GPU NVIDIA (TotalSegmentator), DICOM de test anonymisés, clé Anthropic zéro-rétention.
 
 ## Phase 2 — Dosimétrie
 

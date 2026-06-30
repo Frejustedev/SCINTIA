@@ -4,6 +4,40 @@ Format : une décision = contexte court + choix + justification. Le plus récent
 
 ---
 
+## Phase 1 — MVP scintigraphie osseuse
+
+### D-1.1 — Examen MVP : scintigraphie osseuse (BSI)
+**Choix :** la chaîne de bout en bout est prouvée d'abord sur la **scintigraphie
+osseuse** (sortie : cartographie des foyers + Bone Scan Index).
+**Justification :** examen le plus courant et **prompt de CR déjà rédigé**
+([`docs/08_PROMPT_CR_SCINTI_OSSEUSE.md`](docs/08_PROMPT_CR_SCINTI_OSSEUSE.md)).
+La détection de foyers + BSI est plus exigeante qu'un Krenning ; traitée
+progressivement en 1.3.
+
+### D-1.2 — Anonymisation DICOM
+**Choix :** service `app/services/anonymization.py` — PHI de Type 2 blanchis,
+Type 3 supprimés, tags privés retirés ; **dates décalées d'un offset cohérent
+par patient** (intervalles préservés pour la dosimétrie multi-temps) ; **UID
+régénérés via un mapping partagé** (liaison CT/SPECT conservée). L'identité réelle
+capturée est chiffrée (Fernet, `app/core/crypto.py`) pour `patient_identities`.
+**Clé :** une clé Fernet valide est **dérivée** de `IDENTITY_ENCRYPTION_KEY`
+(SHA-256 → base64), pour découpler le format du secret de l'exigence Fernet.
+**À finaliser (Pass B) :** la **persistance/dérivation de l'offset par patient**
+(aujourd'hui passé au service) pour garantir sa stabilité entre examens.
+
+### D-1.3 — Migrations : Alembic, autogénérées au runtime
+**Choix :** scaffold Alembic (`alembic.ini`, `alembic/env.py` câblé sur
+`Base.metadata` + URL via settings). La **migration initiale est générée au
+premier run avec Postgres** (`alembic revision --autogenerate`), pas hors-ligne.
+
+### D-1.4 — Types de colonnes portables (PG ↔ SQLite)
+**Choix :** types fidèles à Postgres mais testables sur SQLite via
+`with_variant` : `JSONB`→`JSON`, `INET`→`String(45)`, enums **natifs** avec
+`values_callable` (stocke les `.value`, ex. `Tc-99m`), `UUID`/`timestamptz`/`bytea`
+via les types génériques SQLAlchemy 2.0.
+
+---
+
 ## Phase 0 — Socle
 
 ### D-0.14 — « 10 modules » = les 10 étapes du pipeline
