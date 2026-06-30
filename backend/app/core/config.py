@@ -52,6 +52,8 @@ class Settings(BaseSettings):
 
     # ── Segmentation backend: "stub" (offline) | "totalsegmentator" (GPU) ──
     segmenter_backend: str = "stub"
+    # Optional comma-separated TotalSegmentator ROI subset (empty = all structures).
+    segmenter_roi_subset: str = ""
 
     # ── Report generation backend: "template" (offline) | "claude" ──
     report_backend: str = "template"

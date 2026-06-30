@@ -15,16 +15,31 @@ Manual correction of masks remains mandatory before clinical use
 
 from __future__ import annotations
 
+import json
+import shutil
+import subprocess
+import tempfile
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
 from dataclasses import dataclass
 from decimal import Decimal
+from pathlib import Path
+from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.core.logging import get_logger
 from app.models.clinical import OrganMeasurement
 from app.models.enums import SeriesKind, StudyStatus
 from app.models.study import Study
 from app.services.storage import ObjectStorage
+
+logger = get_logger(__name__)
+
+# TotalSegmentator --statistics reports per-ROI "volume"; convert to millilitres.
+# NOTE: the source unit must be confirmed against the installed TotalSegmentator
+# version on the GPU host (assumed mm³ here); validate before clinical use.
+_VOLUME_MM3_PER_ML = 1000.0
 
 
 @dataclass(frozen=True)
@@ -32,6 +47,47 @@ class OrganVolume:
     organ_name: str
     volume_ml: float
     snomed_code: str | None = None
+
+
+def parse_statistics(stats: Mapping[str, Any]) -> list[OrganVolume]:
+    """Parse a TotalSegmentator ``statistics.json`` mapping into organ volumes (mL)."""
+    volumes: list[OrganVolume] = []
+    for organ, metrics in stats.items():
+        if not isinstance(metrics, Mapping):
+            continue
+        raw_volume = metrics.get("volume")
+        if raw_volume is None:
+            continue
+        volume_ml = float(raw_volume) / _VOLUME_MM3_PER_ML
+        if volume_ml <= 0:
+            continue
+        volumes.append(OrganVolume(organ_name=str(organ), volume_ml=round(volume_ml, 3)))
+    return sorted(volumes, key=lambda v: v.organ_name)
+
+
+def dicom_series_to_nifti(ct_instances: list[bytes], out_path: Path) -> None:
+    """Convert in-memory CT DICOM instances to a single NIfTI volume (SimpleITK).
+
+    The geometry (orientation / spacing) is preserved by reading the series through
+    SimpleITK's GDCM reader, which is required for a correct segmentation.
+    """
+    try:
+        import SimpleITK as sitk  # noqa: N813 - conventional alias
+    except ImportError as exc:  # pragma: no cover - depends on the GPU host
+        raise RuntimeError(
+            "SimpleITK requis pour la conversion DICOM→NIfTI (pip install SimpleITK)."
+        ) from exc
+
+    with tempfile.TemporaryDirectory() as tmp:  # pragma: no cover - GPU host
+        tmpdir = Path(tmp)
+        for index, blob in enumerate(ct_instances):
+            (tmpdir / f"{index:05d}.dcm").write_bytes(blob)
+        reader = sitk.ImageSeriesReader()
+        series_ids = reader.GetGDCMSeriesIDs(str(tmpdir))
+        if not series_ids:
+            raise RuntimeError("Aucune série DICOM lisible pour la conversion NIfTI.")
+        reader.SetFileNames(reader.GetGDCMSeriesFileNames(str(tmpdir), series_ids[0]))
+        sitk.WriteImage(reader.Execute(), str(out_path))
 
 
 class Segmenter(ABC):
@@ -83,22 +139,48 @@ class TotalSegmentatorSegmenter(Segmenter):
 
     name = "totalsegmentator-v2"
 
-    def segment(self, ct_instances: list[bytes]) -> list[OrganVolume]:  # pragma: no cover
-        raise NotImplementedError(
-            "TotalSegmentator integration runs on a GPU host; not available offline. "
-            "Wire it here: DICOM->NIfTI (dcm2niix/SimpleITK) then "
-            "`TotalSegmentator -i ct.nii.gz -o out --statistics --roi_subset ...`, "
-            "and parse statistics.json (mm3 -> mL)."
-        )
+    def __init__(self, roi_subset: list[str] | None = None) -> None:
+        self.roi_subset = roi_subset or []
+
+    def segment(self, ct_instances: list[bytes]) -> list[OrganVolume]:
+        """DICOM → NIfTI → TotalSegmentator (--statistics) → per-organ volumes (mL).
+
+        Raises a clear error (no silent fallback) when the GPU tool is unavailable,
+        so a real measurement is never fabricated.
+        """
+        if not ct_instances:
+            raise RuntimeError("Aucune instance CT à segmenter.")
+        binary = shutil.which("TotalSegmentator")
+        if binary is None:
+            raise RuntimeError(
+                "TotalSegmentator introuvable sur l'hôte (GPU requis). "
+                "Installez-le (`pip install TotalSegmentator`) et exécutez sur une machine GPU."
+            )
+        with tempfile.TemporaryDirectory() as tmp:  # pragma: no cover - GPU host
+            tmpdir = Path(tmp)
+            nifti = tmpdir / "ct.nii.gz"
+            dicom_series_to_nifti(ct_instances, nifti)
+            outdir = tmpdir / "seg"
+            cmd = [binary, "-i", str(nifti), "-o", str(outdir), "--statistics"]
+            if self.roi_subset:
+                cmd += ["--roi_subset", *self.roi_subset]
+            logger.info("Running TotalSegmentator (%d ROIs)", len(self.roi_subset))
+            subprocess.run(cmd, check=True, capture_output=True, text=True)
+            stats_path = outdir / "statistics.json"
+            if not stats_path.is_file():
+                raise RuntimeError("TotalSegmentator n'a pas produit statistics.json.")
+            stats = json.loads(stats_path.read_text(encoding="utf-8"))
+        return parse_statistics(stats)
 
 
 def get_segmenter() -> Segmenter:
     """Return the configured segmenter (stub by default)."""
     from app.core.config import get_settings
 
-    backend = get_settings().segmenter_backend.lower()
-    if backend == "totalsegmentator":
-        return TotalSegmentatorSegmenter()
+    settings = get_settings()
+    if settings.segmenter_backend.lower() == "totalsegmentator":
+        roi_subset = [r.strip() for r in settings.segmenter_roi_subset.split(",") if r.strip()]
+        return TotalSegmentatorSegmenter(roi_subset=roi_subset)
     return StubSegmenter()
 
 
