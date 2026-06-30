@@ -9,9 +9,10 @@ from __future__ import annotations
 import secrets
 from collections.abc import Mapping
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.crypto import encrypt_identity
+from app.core.crypto import encrypt_identity, linkage_digest
 from app.models.patient import Patient, PatientIdentity
 
 
@@ -26,8 +27,19 @@ def create_pseudonymous_patient(
     identity: Mapping[str, str],
     identity_key: str,
 ) -> Patient:
-    """Create a patient and, if an identity is given, store it encrypted."""
-    patient = Patient(pseudonym=generate_pseudonym())
+    """Create (or reuse) a pseudonymous patient and store its identity encrypted.
+
+    When the identity carries a linkable identifier, repeat exams of the same
+    person reuse the existing patient (longitudinal follow-up) instead of creating
+    a duplicate.
+    """
+    digest = linkage_digest(identity, identity_key) if identity else None
+    if digest is not None:
+        existing = db.scalar(select(Patient).where(Patient.linkage_hash == digest))
+        if existing is not None:
+            return existing  # same patient across exams; identity already stored
+
+    patient = Patient(pseudonym=generate_pseudonym(), linkage_hash=digest)
     db.add(patient)
     db.flush()
     if identity:

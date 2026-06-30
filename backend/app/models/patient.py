@@ -21,6 +21,9 @@ class Patient(TimestampMixin, Base):
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     pseudonym: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
+    # Keyed HMAC of the source identity: links repeat exams of the same patient
+    # without storing any plaintext identifier (app.core.crypto.linkage_digest).
+    linkage_hash: Mapped[str | None] = mapped_column(String(64), index=True)
 
     identity: Mapped[PatientIdentity | None] = relationship(
         back_populates="patient", uselist=False, cascade="all, delete-orphan"

@@ -36,6 +36,15 @@ class FocusCtx:
 
 
 @dataclass(frozen=True)
+class PriorCtx:
+    """A prior exam of the same patient (longitudinal comparison)."""
+
+    date: str  # ISO date of the prior exam
+    score_type: str | None
+    score_value: str | None
+
+
+@dataclass(frozen=True)
 class ReportContext:
     """Anonymized, structured input for report drafting (no patient identifier)."""
 
@@ -46,6 +55,7 @@ class ReportContext:
     score_type: str | None = None
     score_details: dict[str, Any] = field(default_factory=dict)
     foci: list[FocusCtx] = field(default_factory=list)
+    priors: list[PriorCtx] = field(default_factory=list)
 
 
 EXAM_LABELS = {
@@ -128,6 +138,21 @@ class TemplateReportGenerator(ReportGenerator):
         for organ in context.organs:
             flag = " (corrigé)" if organ.corrected else ""
             lines.append(f"    · {organ.organ_name} : {_fmt(organ.volume_ml)} mL{flag}")
+        if context.priors:
+            lines.append("")
+            lines.append("ANTÉRIORITÉS")
+            for prior in context.priors:
+                label = _SCORE_LABELS.get(prior.score_type or "", (prior.score_type or "").upper())
+                if prior.score_value is not None and label:
+                    lines.append(f"- {prior.date} — {label} : {prior.score_value}.")
+                elif prior.score_value is not None:
+                    lines.append(f"- {prior.date} — score : {prior.score_value}.")
+                else:
+                    lines.append(f"- {prior.date} — examen antérieur (score non disponible).")
+            lines.append(
+                "    (Comparaison factuelle aux antériorités ; interprétation de "
+                "l'évolution à la charge du médecin.)"
+            )
         lines.append("")
         lines.append("CONCLUSION")
         lines.append(
@@ -177,6 +202,10 @@ def _context_to_payload(context: ReportContext) -> str:
         "foyers": [
             {"localisation": f.anatomical_ref, "ratio": f.ratio, "taille_mm": f.size_mm}
             for f in context.foci
+        ],
+        "anteriorites": [
+            {"date": p.date, "score_type": p.score_type, "score_valeur": p.score_value}
+            for p in context.priors
         ],
     }
     return (

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import hmac
 import json
 from collections.abc import Mapping
 from typing import Any
@@ -24,6 +25,26 @@ from cryptography.fernet import Fernet, InvalidToken
 def _fernet(key: str) -> Fernet:
     digest = hashlib.sha256(key.encode("utf-8")).digest()
     return Fernet(base64.urlsafe_b64encode(digest))
+
+
+def linkage_digest(identity: Mapping[str, Any], key: str) -> str | None:
+    """A deterministic, keyed digest linking exams of the same patient.
+
+    HMAC-SHA256 over the source patient ID (or name + birth date), keyed by the
+    identity secret. It is not reversible without the key and lets repeat exams of
+    the same person reuse one pseudonymous patient — without storing any plaintext
+    identifier. Returns ``None`` when there is nothing to link on.
+    """
+    if not key:
+        return None
+    patient_id = identity.get("PatientID")
+    if patient_id:
+        source = f"id:{patient_id}"
+    elif identity.get("PatientName"):
+        source = f"nb:{identity.get('PatientName')}|{identity.get('PatientBirthDate') or ''}"
+    else:
+        return None
+    return hmac.new(key.encode("utf-8"), source.encode("utf-8"), hashlib.sha256).hexdigest()
 
 
 def encrypt_identity(identity: Mapping[str, Any], key: str) -> bytes:

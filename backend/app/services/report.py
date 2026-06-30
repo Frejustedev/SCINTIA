@@ -17,9 +17,11 @@ from app.models.clinical import ExamScore, Lesion, OrganMeasurement
 from app.models.enums import ReportStatus, ReportVersionKind, StudyStatus
 from app.models.report import Report, ReportVersion
 from app.models.study import Study
+from app.services.history import prior_studies
 from app.services.report_generation import (
     FocusCtx,
     OrganVolumeCtx,
+    PriorCtx,
     ReportContext,
     ReportGenerator,
 )
@@ -57,6 +59,7 @@ def build_context(db: Session, study: Study) -> ReportContext:
     score = db.scalar(
         select(ExamScore).where(ExamScore.study_id == study.id).order_by(ExamScore.id.desc())
     )
+    priors = prior_studies(db, study=study)
     return ReportContext(
         exam_type=study.exam_type.value,
         pseudonym=study.patient.pseudonym,
@@ -79,6 +82,14 @@ def build_context(db: Session, study: Study) -> ReportContext:
             )
             for lesion in lesions
             if not lesion.is_physiological
+        ],
+        priors=[
+            PriorCtx(
+                date=prior.created_at.date().isoformat(),
+                score_type=prior.score_type,
+                score_value=prior.score_value,
+            )
+            for prior in priors
         ],
     )
 

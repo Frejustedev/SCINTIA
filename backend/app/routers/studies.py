@@ -35,11 +35,13 @@ from app.models.report import Report
 from app.models.study import Study
 from app.models.user import User
 from app.schemas.analysis import ExamScoreRead
+from app.schemas.history import StudyHistoryEntry
 from app.schemas.ingestion import IngestionSummary
 from app.schemas.results import StudyResults
 from app.schemas.segmentation import MeasurementCorrection, OrganMeasurementRead
 from app.schemas.study import StudyCreate, StudyRead
 from app.services.erasure import erase_study
+from app.services.history import prior_studies
 from app.services.ingestion import ingest_study
 from app.services.pipeline import run_pipeline
 from app.services.report_generation import get_report_generator
@@ -282,6 +284,18 @@ def get_results(
         score=ExamScoreRead.model_validate(score) if score is not None else None,
         report_status=report.status if report is not None else None,
     )
+
+
+@router.get("/{study_id}/history", response_model=list[StudyHistoryEntry])
+def study_history(
+    study_id: uuid.UUID,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: CurrentUser,
+) -> list[StudyHistoryEntry]:
+    """Prior exams of the same patient and exam type (longitudinal follow-up)."""
+    study = _get_visible_study(db, study_id, current_user)
+    priors = prior_studies(db, study=study, viewer=current_user)
+    return [StudyHistoryEntry.model_validate(prior) for prior in priors]
 
 
 @router.delete("/{study_id}", status_code=status.HTTP_204_NO_CONTENT)
