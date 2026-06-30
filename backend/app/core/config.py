@@ -42,6 +42,10 @@ class Settings(BaseSettings):
     # ── HTTP hardening ──
     enable_hsts: bool = False  # set true behind the production TLS proxy
 
+    # ── Report PDF templating (per establishment) ──
+    establishment_name: str = "Service de Médecine Nucléaire"
+    establishment_subtitle: str = ""
+
     # ── Object storage (local volume by default; MinIO later) ──
     storage_dir: str = "data/objects"
 

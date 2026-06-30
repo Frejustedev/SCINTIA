@@ -119,6 +119,7 @@ def export_report(
     db: Annotated[Session, Depends(get_db)],
     current_user: CurrentUser,
     export_format: Annotated[str, Query(alias="format")] = "pdf",
+    theme: Annotated[str, Query()] = "light",
 ) -> Response:
     """Export the report.
 
@@ -198,12 +199,16 @@ def export_report(
         validator = db.get(User, report.validated_by)
         validator_name = validator.full_name if validator is not None else None
 
+    settings = get_settings()
     pdf = build_report_pdf(
         exam_label=exam_label,
         identity=identity,
         content=content,
         validated_by_name=validator_name,
         validated_at=report.validated_at.isoformat() if report.validated_at is not None else None,
+        establishment_name=settings.establishment_name,
+        establishment_subtitle=settings.establishment_subtitle,
+        theme="dark" if theme == "dark" else "light",
     )
     record_audit(db, action="export.pdf", user_id=current_user.id, study_id=study_id)
     return Response(

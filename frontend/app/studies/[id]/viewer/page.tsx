@@ -5,14 +5,17 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect } from "react";
 
 import { DicomViewer } from "@/components/DicomViewer";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { Logo } from "@/components/Logo";
 import { Card } from "@/components/ui/Card";
 import { getToken } from "@/lib/api";
+import { useT } from "@/lib/locale";
 
 export default function ViewerPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const studyId = params.id;
+  const t = useT();
 
   useEffect(() => {
     if (!getToken()) router.replace("/login");
@@ -27,17 +30,20 @@ export default function ViewerPage() {
             Scinti<span className="bg-grad-hot bg-clip-text text-transparent">a</span>
           </span>
         </Link>
-        <Link
-          href={`/studies/${studyId}`}
-          className="font-mono text-xs uppercase tracking-[0.1em] text-muted hover:text-ink-200"
-        >
-          ← Résultats
-        </Link>
+        <div className="flex items-center gap-4">
+          <LanguageSwitcher />
+          <Link
+            href={`/studies/${studyId}`}
+            className="font-mono text-xs uppercase tracking-[0.1em] text-muted hover:text-ink-200"
+          >
+            {t("viewer.back")}
+          </Link>
+        </div>
       </header>
 
       <main className="flex-1 py-2">
         <Card className="p-6 shadow-soft">
-          <h1 className="mb-4 font-display text-lg text-ink-100">Visualiseur DICOM</h1>
+          <h1 className="mb-4 font-display text-lg text-ink-100">{t("viewer.title")}</h1>
           <DicomViewer studyId={studyId} />
         </Card>
       </main>

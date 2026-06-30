@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { fetchFrame, listSeries, type SeriesRead } from "@/lib/api";
+import { useT } from "@/lib/locale";
 
 /**
  * Lightweight DICOM viewer: scrolls server-rendered PNG frames with window/level.
@@ -10,6 +11,7 @@ import { fetchFrame, listSeries, type SeriesRead } from "@/lib/api";
  * (DECISIONS.md); this works today without a client-side DICOM decoder.
  */
 export function DicomViewer({ studyId }: { studyId: string }) {
+  const t = useT();
   const [series, setSeries] = useState<SeriesRead[]>([]);
   const [seriesId, setSeriesId] = useState<string | null>(null);
   const [index, setIndex] = useState(0);
@@ -104,13 +106,13 @@ export function DicomViewer({ studyId }: { studyId: string }) {
             className="h-full w-full object-contain"
           />
         ) : (
-          <span className="font-mono text-xs text-muted">Chargement…</span>
+          <span className="font-mono text-xs text-muted">{t("common.loading")}</span>
         )}
       </div>
 
       <div className="flex flex-col gap-1">
         <label className="flex items-center justify-between font-mono text-xs text-muted">
-          <span>Coupe</span>
+          <span>{t("viewer.slice")}</span>
           <span className="tabular-nums text-ink-200">
             {count ? index + 1 : 0} / {count}
           </span>
@@ -127,7 +129,9 @@ export function DicomViewer({ studyId }: { studyId: string }) {
 
       <div className="grid grid-cols-2 gap-4">
         <label className="flex flex-col gap-1 font-mono text-xs text-muted">
-          <span>Fenêtre (W) : {windowWidth}</span>
+          <span>
+            {t("viewer.window")} : {windowWidth}
+          </span>
           <input
             type="range"
             min={1}
@@ -138,7 +142,9 @@ export function DicomViewer({ studyId }: { studyId: string }) {
           />
         </label>
         <label className="flex flex-col gap-1 font-mono text-xs text-muted">
-          <span>Niveau (L) : {level}</span>
+          <span>
+            {t("viewer.level")} : {level}
+          </span>
           <input
             type="range"
             min={-1000}

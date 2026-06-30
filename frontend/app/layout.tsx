@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { IBM_Plex_Mono, IBM_Plex_Sans, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 
+import { LocaleProvider } from "@/lib/locale";
+
 // Display, UI and data fonts (charte §4). All open-source.
 const display = Space_Grotesk({
   subsets: ["latin"],
@@ -30,10 +32,12 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  // lang=fr / dir=ltr by default. Arabic (RTL) toggles `dir` in a later phase.
+  // lang=fr / dir=ltr by default; LocaleProvider switches lang + dir (RTL for Arabic).
   return (
     <html lang="fr" dir="ltr" className={`${display.variable} ${sans.variable} ${mono.variable}`}>
-      <body className="min-h-screen bg-bg font-sans text-text antialiased">{children}</body>
+      <body className="min-h-screen bg-bg font-sans text-text antialiased">
+        <LocaleProvider>{children}</LocaleProvider>
+      </body>
     </html>
   );
 }
