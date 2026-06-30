@@ -6,6 +6,7 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -15,6 +16,7 @@ from app.core.config import get_settings
 from app.core.crypto import decrypt_identity
 from app.core.db import get_db
 from app.core.security import CurrentUser, require_roles
+from app.models.clinical import ExamScore, OrganMeasurement
 from app.models.enums import ReportStatus, Role
 from app.models.patient import PatientIdentity
 from app.models.report import Report
@@ -22,6 +24,7 @@ from app.models.study import Study
 from app.models.user import User
 from app.schemas.report import ReportEdit, ReportRead
 from app.services.export import build_report_pdf
+from app.services.interop import build_dicom_sr, build_fhir_diagnostic_report
 from app.services.report import current_content, generate_report, save_edit, validate_report
 from app.services.report_generation import EXAM_LABELS, get_report_generator
 
@@ -117,16 +120,69 @@ def export_report(
     current_user: CurrentUser,
     export_format: Annotated[str, Query(alias="format")] = "pdf",
 ) -> Response:
+    """Export the report.
+
+    - ``pdf``: re-identified (decrypts the identity locally; PDF requires validation).
+    - ``fhir`` / ``dicom-sr``: pseudonymous structured exports for the RIS/PACS — no
+      real identity is ever included.
+    """
     study = _get_study(db, study_id, current_user)
     report = _get_report(db, study_id)
-    if report.status is not ReportStatus.validated:
+    content = current_content(report) or ""
+    validated = report.status is ReportStatus.validated
+    exam_label = EXAM_LABELS.get(study.exam_type.value, study.exam_type.value)
+    pseudonym = study.patient.pseudonym
+
+    if export_format == "fhir":
+        score = db.scalar(
+            select(ExamScore).where(ExamScore.study_id == study_id).order_by(ExamScore.id.desc())
+        )
+        organs = list(
+            db.scalars(
+                select(OrganMeasurement)
+                .where(OrganMeasurement.study_id == study_id)
+                .order_by(OrganMeasurement.organ_name)
+            )
+        )
+        fhir = build_fhir_diagnostic_report(
+            pseudonym=pseudonym,
+            exam_label=exam_label,
+            content=content,
+            validated=validated,
+            issued_iso=report.validated_at.isoformat() if report.validated_at is not None else None,
+            score_type=score.score_type.value if score is not None else None,
+            score_value=score.value if score is not None else None,
+            organs=[
+                (o.organ_name, float(o.volume_ml) if o.volume_ml is not None else None)
+                for o in organs
+            ],
+        )
+        record_audit(db, action="export.fhir", user_id=current_user.id, study_id=study_id)
+        return JSONResponse(
+            content=fhir,
+            headers={"Content-Disposition": f'attachment; filename="CR_{pseudonym}.fhir.json"'},
+        )
+
+    if export_format == "dicom-sr":
+        sr = build_dicom_sr(
+            pseudonym=pseudonym, exam_label=exam_label, content=content, validated=validated
+        )
+        record_audit(db, action="export.dicom_sr", user_id=current_user.id, study_id=study_id)
+        return Response(
+            content=sr,
+            media_type="application/dicom",
+            headers={"Content-Disposition": f'attachment; filename="CR_{pseudonym}.sr.dcm"'},
+        )
+
+    if export_format != "pdf":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Format non supporté.")
+
+    # PDF is the re-identified export and requires a validated report.
+    if not validated:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Validez le compte-rendu avant l'export.",
         )
-    if export_format != "pdf":
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Format non supporté.")
-
     identity: dict[str, str] = {}
     patient_identity = db.scalar(
         select(PatientIdentity).where(PatientIdentity.patient_id == study.patient_id)
@@ -143,9 +199,9 @@ def export_report(
         validator_name = validator.full_name if validator is not None else None
 
     pdf = build_report_pdf(
-        exam_label=EXAM_LABELS.get(study.exam_type.value, study.exam_type.value),
+        exam_label=exam_label,
         identity=identity,
-        content=current_content(report) or "",
+        content=content,
         validated_by_name=validator_name,
         validated_at=report.validated_at.isoformat() if report.validated_at is not None else None,
     )
@@ -153,5 +209,5 @@ def export_report(
     return Response(
         content=pdf,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="CR_{study.patient.pseudonym}.pdf"'},
+        headers={"Content-Disposition": f'attachment; filename="CR_{pseudonym}.pdf"'},
     )
