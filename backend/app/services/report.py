@@ -69,6 +69,7 @@ def build_context(db: Session, study: Study) -> ReportContext:
             for o in organs
         ],
         score_value=score.value if score is not None else None,
+        score_type=score.score_type.value if score is not None else None,
         score_details=(score.details or {}) if score is not None else {},
         foci=[
             FocusCtx(

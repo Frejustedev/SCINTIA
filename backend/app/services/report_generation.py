@@ -42,6 +42,7 @@ class ReportContext:
     pseudonym: str
     organs: list[OrganVolumeCtx]
     score_value: str | None
+    score_type: str | None = None
     score_details: dict[str, Any] = field(default_factory=dict)
     foci: list[FocusCtx] = field(default_factory=list)
 
@@ -88,16 +89,20 @@ class TemplateReportGenerator(ReportGenerator):
         )
         lines.append("")
         lines.append("RÉSULTATS")
+        n_foci = context.score_details.get("n_foci")
+        if n_foci is not None:
+            lines.append(f"- Foyers recensés : {n_foci}.")
         if context.score_value is not None:
+            label = context.score_type.upper() if context.score_type else "Score"
+            lines.append(f"- Score {label} : {context.score_value}.")
             proxy = context.score_details.get("bsi_proxy_pct")
-            n_foci = context.score_details.get("n_foci")
-            if n_foci is not None:
-                lines.append(f"- Foyers hyperfixants non physiologiques recensés : {n_foci}.")
             if proxy is not None:
                 lines.append(
-                    f"- Proxy de fraction volumique squelettique : {_fmt(float(proxy))} %"
-                    " (NON validé cliniquement — à confirmer)."
+                    f"    Fraction volumique squelettique (proxy) : {_fmt(float(proxy))} %."
                 )
+            if context.score_details.get("needs_clinical_validation"):
+                note = context.score_details.get("note") or context.score_details.get("disclaimer")
+                lines.append(f"    ⚠ {note or 'À valider cliniquement.'}")
         for focus in context.foci:
             ref = focus.anatomical_ref or "localisation à préciser"
             ratio = f", ratio {_fmt(focus.ratio)}" if focus.ratio is not None else ""

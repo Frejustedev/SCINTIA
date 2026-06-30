@@ -20,11 +20,16 @@ from app.models.enums import ExamType, ScoreType
 
 @dataclass(frozen=True)
 class ExamResult:
-    """Output of an analyzer: a standardized score plus a factual summary."""
+    """Output of an analyzer: a factual summary and an optional standardized score.
 
-    score_type: ScoreType
-    score_value: str
+    ``score_type``/``score_value`` are None when an exam yields no numeric score
+    (e.g. parathyroid localization) or when the validated clinical method is not
+    yet wired — the framework reports the facts and flags it for validation.
+    """
+
     summary: str
+    score_type: ScoreType | None = None
+    score_value: str | None = None
     details: dict[str, Any] = field(default_factory=dict)
 
 

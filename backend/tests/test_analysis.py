@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-import pytest
 from sqlalchemy.orm import Session
 
 from app.models import Lesion, OrganMeasurement, Patient, Study
 from app.models.enums import ExamType, ScoreType, StudyStatus
 from app.services.analysis import run_analysis
 from app.services.exams import get_analyzer
+from app.services.exams.parathyroid import ParathyroidAnalyzer
 
 
 def _bone_study_with_findings(db: Session) -> Study:
@@ -45,6 +45,25 @@ def test_bone_analysis_computes_proxy_and_flags_validation(db_session: Session) 
     assert study.status is StudyStatus.analyzing
 
 
-def test_unsupported_exam_has_no_analyzer_yet() -> None:
-    with pytest.raises(NotImplementedError):
-        get_analyzer(ExamType.octreotide)
+def test_all_exam_types_have_an_analyzer() -> None:
+    for exam_type in ExamType:
+        assert get_analyzer(exam_type).exam_type is exam_type
+
+
+def test_framework_analyzers_flag_clinical_validation() -> None:
+    for exam_type in (
+        ExamType.octreotide,
+        ExamType.mibg,
+        ExamType.myocardial_spect,
+        ExamType.lung_vq,
+    ):
+        result = get_analyzer(exam_type).analyze(organs=[], lesions=[])
+        assert result.score_type is not None
+        assert result.details["needs_clinical_validation"] is True
+
+
+def test_parathyroid_yields_localization_without_score() -> None:
+    result = ParathyroidAnalyzer().analyze(organs=[], lesions=[])
+    assert result.score_type is None
+    assert result.score_value is None
+    assert result.details["needs_clinical_validation"] is True
