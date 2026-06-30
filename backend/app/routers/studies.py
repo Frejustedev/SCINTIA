@@ -18,12 +18,18 @@ from app.core.config import get_settings
 from app.core.db import get_db
 from app.core.security import CurrentUser
 from app.models.clinical import ExamScore, OrganMeasurement
+from app.models.enums import SeriesKind
+from app.models.report import Report
 from app.models.study import Study
 from app.schemas.analysis import ExamScoreRead
 from app.schemas.ingestion import IngestionSummary
+from app.schemas.results import StudyResults
 from app.schemas.segmentation import MeasurementCorrection, OrganMeasurementRead
 from app.schemas.study import StudyCreate, StudyRead
 from app.services.ingestion import ingest_study
+from app.services.pipeline import run_pipeline
+from app.services.report_generation import get_report_generator
+from app.services.segmentation import get_segmenter
 from app.services.storage import ObjectStorage, get_storage
 from app.services.studies import create_study
 
@@ -185,4 +191,72 @@ def get_score(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Examen introuvable.")
     return db.scalar(
         select(ExamScore).where(ExamScore.study_id == study_id).order_by(ExamScore.id.desc())
+    )
+
+
+@router.post("/{study_id}/analyze", response_model=StudyRead)
+def analyze(
+    study_id: uuid.UUID,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: CurrentUser,
+    storage: Annotated[ObjectStorage, Depends(get_storage)],
+) -> StudyRead:
+    """Run the analysis pipeline (segment -> quantify -> analyze -> report).
+
+    Synchronous in Phase 1; on a deployed stack this enqueues a Celery task
+    (app.workers.tasks.run_pipeline_task) so GPU work runs off the request.
+    """
+    study = db.get(Study, study_id)
+    if study is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Examen introuvable.")
+    if not any(series.kind is SeriesKind.ct for series in study.series):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Aucune série CT — chargez d'abord les fichiers DICOM.",
+        )
+    try:
+        run_pipeline(
+            db,
+            storage,
+            study=study,
+            segmenter=get_segmenter(),
+            generator=get_report_generator(),
+        )
+        record_audit(db, action="study.analyze", user_id=current_user.id, study_id=study_id)
+    except Exception as exc:  # failure is persisted on the study (status=error)
+        record_audit(
+            db,
+            action="study.error",
+            user_id=current_user.id,
+            study_id=study_id,
+            details={"error": str(exc)},
+        )
+    return _to_read(study)
+
+
+@router.get("/{study_id}/results", response_model=StudyResults)
+def get_results(
+    study_id: uuid.UUID,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: CurrentUser,
+) -> StudyResults:
+    study = db.get(Study, study_id)
+    if study is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Examen introuvable.")
+    organs = list(
+        db.scalars(
+            select(OrganMeasurement)
+            .where(OrganMeasurement.study_id == study_id)
+            .order_by(OrganMeasurement.organ_name)
+        )
+    )
+    score = db.scalar(
+        select(ExamScore).where(ExamScore.study_id == study_id).order_by(ExamScore.id.desc())
+    )
+    report = db.scalar(select(Report).where(Report.study_id == study_id))
+    return StudyResults(
+        study=_to_read(study),
+        organs=[OrganMeasurementRead.model_validate(o) for o in organs],
+        score=ExamScoreRead.model_validate(score) if score is not None else None,
+        report_status=report.status if report is not None else None,
     )
