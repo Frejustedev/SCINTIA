@@ -17,8 +17,10 @@ from app.core.audit import record_audit
 from app.core.config import get_settings
 from app.core.db import get_db
 from app.core.security import CurrentUser
+from app.models.clinical import OrganMeasurement
 from app.models.study import Study
 from app.schemas.ingestion import IngestionSummary
+from app.schemas.segmentation import MeasurementCorrection, OrganMeasurementRead
 from app.schemas.study import StudyCreate, StudyRead
 from app.services.ingestion import ingest_study
 from app.services.storage import ObjectStorage, get_storage
@@ -128,3 +130,45 @@ async def upload_files(
         instances=result.instances,
         skipped=result.skipped,
     )
+
+
+@router.get("/{study_id}/segmentation", response_model=list[OrganMeasurementRead])
+def list_segmentation(
+    study_id: uuid.UUID,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: CurrentUser,
+) -> list[OrganMeasurement]:
+    if db.get(Study, study_id) is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Examen introuvable.")
+    return list(
+        db.scalars(
+            select(OrganMeasurement)
+            .where(OrganMeasurement.study_id == study_id)
+            .order_by(OrganMeasurement.organ_name)
+        )
+    )
+
+
+@router.patch("/{study_id}/measurements/{measurement_id}", response_model=OrganMeasurementRead)
+def correct_measurement(
+    study_id: uuid.UUID,
+    measurement_id: uuid.UUID,
+    payload: MeasurementCorrection,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: CurrentUser,
+) -> OrganMeasurement:
+    """Manually correct a segmentation-derived volume (mandatory clinical capability)."""
+    measurement = db.get(OrganMeasurement, measurement_id)
+    if measurement is None or measurement.study_id != study_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Mesure introuvable.")
+    measurement.volume_ml = payload.volume_ml
+    measurement.segmentation_corrected = True
+    db.flush()
+    record_audit(
+        db,
+        action="segmentation.correct",
+        user_id=current_user.id,
+        study_id=study_id,
+        details={"measurement_id": str(measurement_id)},
+    )
+    return measurement

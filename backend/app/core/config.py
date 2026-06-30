@@ -40,6 +40,12 @@ class Settings(BaseSettings):
     # ── Object storage (local volume by default; MinIO later) ──
     storage_dir: str = "data/objects"
 
+    # ── Segmentation backend: "stub" (offline) | "totalsegmentator" (GPU) ──
+    segmenter_backend: str = "stub"
+
+    # ── Report generation backend: "template" (offline) | "claude" ──
+    report_backend: str = "template"
+
     # ── Datastores (not connected in Phase 0, declared for later phases) ──
     database_url: str | None = None
     redis_url: str | None = None
