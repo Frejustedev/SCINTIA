@@ -1,7 +1,8 @@
 """Celery application instance (broker/result backend from environment).
 
-No tasks are registered in Phase 0. The async pipeline (chained tasks with
-real-time progress over Redis) is built in Phase 1.
+The pipeline task lives in ``app.workers.tasks`` and is registered via
+``include`` so a worker started with ``-A app.workers.celery_app:celery_app``
+discovers it without importing the module by hand.
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ celery_app = Celery(
     "scintia",
     broker=_settings.celery_broker_url or _settings.redis_url,
     backend=_settings.celery_result_backend,
+    include=["app.workers.tasks"],
 )
 celery_app.conf.update(
     task_track_started=True,
