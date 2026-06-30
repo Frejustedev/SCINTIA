@@ -44,8 +44,16 @@ def test_progress_streams_final_status(
 
 
 def test_progress_rejects_invalid_token(client: TestClient) -> None:
-    with pytest.raises(WebSocketDisconnect):
+    with pytest.raises(WebSocketDisconnect) as exc_info:
         with client.websocket_connect(
             f"/api/v1/studies/{uuid.uuid4()}/progress?token=bogus"
         ) as websocket:
             websocket.receive_json()
+    assert exc_info.value.code == 1008
+
+
+def test_progress_rejects_missing_token(client: TestClient) -> None:
+    with pytest.raises(WebSocketDisconnect) as exc_info:
+        with client.websocket_connect(f"/api/v1/studies/{uuid.uuid4()}/progress") as websocket:
+            websocket.receive_json()
+    assert exc_info.value.code == 1008

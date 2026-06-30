@@ -49,7 +49,7 @@ def test_end_to_end_pipeline(
 
     results = client.get(f"/api/v1/studies/{study_id}/results", headers=headers).json()
     assert len(results["organs"]) == 16
-    assert results["score"]["score_type"] == "bsi"
+    assert results["score"]["score_type"] == "bsi_proxy"
     assert results["report_status"] == "draft"
 
     report = client.get(f"/api/v1/studies/{study_id}/report", headers=headers).json()

@@ -54,7 +54,7 @@ class BoneScanAnalyzer(ExamAnalyzer):
             "disclaimer": _DISCLAIMER,
         }
         return ExamResult(
-            score_type=ScoreType.bsi,
+            score_type=ScoreType.bsi_proxy,  # never the validated BSI
             score_value=f"{bsi_proxy:.1f}",
             summary=summary,
             details=details,

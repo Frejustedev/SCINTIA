@@ -56,6 +56,22 @@ EXAM_LABELS = {
     "lung_vq": "Scintigraphie pulmonaire ventilation/perfusion",
 }
 
+# Human labels for score types. Note: ``bsi_proxy`` is explicitly NOT the validated
+# BSI — it is never rendered under the bare validated-metric name.
+_SCORE_LABELS = {
+    "bsi": "Bone Scan Index (BSI)",
+    "bsi_proxy": "BSI (proxy de fraction volumique)",
+    "krenning": "Score de Krenning",
+    "curie": "Score de Curie",
+    "siopen": "Score SIOPEN",
+    "pioped": "Probabilité PIOPED",
+    "lvef": "FEVG",
+    "sss": "SSS",
+    "srs": "SRS",
+    "sds": "SDS",
+    "tid": "TID",
+}
+
 
 def _fmt(value: float | None) -> str:
     """French numeric formatting (comma decimal)."""
@@ -93,14 +109,14 @@ class TemplateReportGenerator(ReportGenerator):
         if n_foci is not None:
             lines.append(f"- Foyers recensés : {n_foci}.")
         if context.score_value is not None:
-            label = context.score_type.upper() if context.score_type else "Score"
-            lines.append(f"- Score {label} : {context.score_value}.")
-            proxy = context.score_details.get("bsi_proxy_pct")
-            if proxy is not None:
-                lines.append(
-                    f"    Fraction volumique squelettique (proxy) : {_fmt(float(proxy))} %."
-                )
-            if context.score_details.get("needs_clinical_validation"):
+            label = _SCORE_LABELS.get(
+                context.score_type or "", (context.score_type or "score").upper()
+            )
+            needs_validation = bool(context.score_details.get("needs_clinical_validation"))
+            qualifier = " — NON validé cliniquement" if needs_validation else ""
+            unit = " %" if context.score_type == "bsi_proxy" else ""
+            lines.append(f"- {label}{qualifier} : {context.score_value}{unit}.")
+            if needs_validation:
                 note = context.score_details.get("note") or context.score_details.get("disclaimer")
                 lines.append(f"    ⚠ {note or 'À valider cliniquement.'}")
         for focus in context.foci:

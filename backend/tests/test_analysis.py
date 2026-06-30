@@ -36,7 +36,7 @@ def test_bone_analysis_computes_proxy_and_flags_validation(db_session: Session) 
     study = _bone_study_with_findings(db_session)
     score = run_analysis(db_session, study=study)
 
-    assert score.score_type is ScoreType.bsi
+    assert score.score_type is ScoreType.bsi_proxy
     # involved 40 / total 100 * 100 = 40.0
     assert float(score.value) == 40.0
     assert score.details is not None
@@ -67,3 +67,28 @@ def test_parathyroid_yields_localization_without_score() -> None:
     assert result.score_type is None
     assert result.score_value is None
     assert result.details["needs_clinical_validation"] is True
+
+
+def test_bone_report_never_labels_proxy_as_validated_bsi() -> None:
+    from app.services.report_generation import (
+        OrganVolumeCtx,
+        ReportContext,
+        TemplateReportGenerator,
+    )
+
+    context = ReportContext(
+        exam_type="bone",
+        pseudonym="P",
+        organs=[OrganVolumeCtx("vertebrae_L3", 40.0, False)],
+        score_value="40.0",
+        score_type="bsi_proxy",
+        score_details={
+            "bsi_proxy_pct": 40.0,
+            "needs_clinical_validation": True,
+            "disclaimer": "Proxy NON validé.",
+        },
+    )
+    text = TemplateReportGenerator().generate(context)
+    assert "Score BSI :" not in text  # never the bare validated label
+    assert "NON validé" in text
+    assert "proxy" in text.lower()

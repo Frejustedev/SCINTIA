@@ -10,7 +10,16 @@ import asyncio
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, WebSocket, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    Query,
+    UploadFile,
+    WebSocket,
+    WebSocketDisconnect,
+    status,
+)
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -225,14 +234,8 @@ def analyze(
             generator=get_report_generator(),
         )
         record_audit(db, action="study.analyze", user_id=current_user.id, study_id=study_id)
-    except Exception as exc:  # failure is persisted on the study (status=error)
-        record_audit(
-            db,
-            action="study.error",
-            user_id=current_user.id,
-            study_id=study_id,
-            details={"error": str(exc)},
-        )
+    except Exception:  # failure is persisted on the study (status=error); detail is logged
+        record_audit(db, action="study.error", user_id=current_user.id, study_id=study_id)
     return _to_read(study)
 
 
@@ -291,14 +294,18 @@ async def progress(
         await websocket.close(code=1008)
         return
 
-    for _ in range(240):
-        db.expire_all()
-        study = db.get(Study, study_id)
-        if study is None:
-            await websocket.send_json({"status": "not_found", "error": None})
-            break
-        await websocket.send_json({"status": study.status.value, "error": study.error_message})
-        if study.status in _TERMINAL_STATUSES:
-            break
-        await asyncio.sleep(0.5)
-    await websocket.close()
+    try:
+        for _ in range(240):
+            db.expire_all()
+            study = db.get(Study, study_id)
+            if study is None:
+                await websocket.send_json({"status": "not_found", "error": None})
+                break
+            await websocket.send_json({"status": study.status.value, "error": study.error_message})
+            if study.status in _TERMINAL_STATUSES:
+                break
+            await asyncio.sleep(0.5)
+        await websocket.close()
+    except WebSocketDisconnect:
+        # Client navigated away — a normal end of stream, not an error.
+        return

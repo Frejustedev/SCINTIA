@@ -65,6 +65,7 @@ class ScoreType(str, enum.Enum):
     siopen = "siopen"
     pioped = "pioped"
     bsi = "bsi"
+    bsi_proxy = "bsi_proxy"  # transparent proxy, never the validated BSI
     lvef = "lvef"
     sss = "sss"
     srs = "srs"

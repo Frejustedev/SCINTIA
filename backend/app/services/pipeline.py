@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
+from app.core.logging import get_logger
 from app.models.enums import StudyStatus
 from app.models.study import Study
 from app.services.analysis import run_analysis
@@ -20,6 +21,8 @@ from app.services.report import generate_report
 from app.services.report_generation import ReportGenerator
 from app.services.segmentation import Segmenter, run_segmentation
 from app.services.storage import ObjectStorage
+
+logger = get_logger(__name__)
 
 
 def run_pipeline(
@@ -43,8 +46,11 @@ def run_pipeline(
         run_analysis(db, study=study)
         generate_report(db, study=study, generator=generator)  # sets status -> ready
         return study
-    except Exception as exc:
+    except Exception:
+        # Keep the patient-facing message generic; the detail (which may reference
+        # source data) stays in server logs only — never on the study or the socket.
+        logger.exception("Pipeline failed for study %s", study.id)
         study.status = StudyStatus.error
-        study.error_message = str(exc)
+        study.error_message = "Échec de l'analyse — voir les journaux serveur."
         db.flush()
         raise

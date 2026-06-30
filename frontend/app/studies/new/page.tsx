@@ -135,7 +135,11 @@ export default function NewStudyPage() {
             </div>
 
             {progress ? <p className="font-mono text-xs text-info">{progress}</p> : null}
-            {error ? <p className="text-sm text-crit">{error}</p> : null}
+            {error ? (
+              <p role="alert" className="text-sm text-crit">
+                {error}
+              </p>
+            ) : null}
 
             <Button type="submit" variant="signal" disabled={busy}>
               {busy ? "Traitement…" : "Lancer l'analyse"}

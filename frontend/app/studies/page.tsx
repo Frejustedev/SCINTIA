@@ -51,7 +51,11 @@ export default function StudiesPage() {
 
       <main className="flex-1 py-2">
         <h1 className="mb-4 font-display text-2xl text-ink-100">Examens</h1>
-        {error ? <p className="mb-4 text-sm text-crit">{error}</p> : null}
+        {error ? (
+          <p role="alert" className="mb-4 text-sm text-crit">
+            {error}
+          </p>
+        ) : null}
 
         <Card className="p-6 shadow-soft">
           {studies.length === 0 ? (

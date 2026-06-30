@@ -77,7 +77,11 @@ export default function LoginPage() {
             autoComplete="current-password"
             required
           />
-          {error ? <p className="text-sm text-crit">{error}</p> : null}
+          {error ? (
+            <p role="alert" className="text-sm text-crit">
+              {error}
+            </p>
+          ) : null}
           <Button type="submit" disabled={busy}>
             {busy ? "Veuillez patienter…" : bootstrap ? "Créer et se connecter" : "Se connecter"}
           </Button>

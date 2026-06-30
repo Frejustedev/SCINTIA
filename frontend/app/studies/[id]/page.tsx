@@ -62,13 +62,26 @@ export default function StudyResultsPage() {
     if (!getToken()) return undefined;
     const socket = new WebSocket(progressSocketUrl(studyId));
     socket.onmessage = (event) => {
-      const data = JSON.parse(event.data) as { status: string };
-      setLiveStatus(data.status);
-      if (data.status === "ready") {
-        load().catch(() => undefined);
+      let data: { status?: string };
+      try {
+        data = JSON.parse(event.data as string) as { status?: string };
+      } catch {
+        return;
+      }
+      if (typeof data.status === "string") {
+        setLiveStatus(data.status);
+        if (data.status === "ready") {
+          load().catch(() => undefined);
+        }
       }
     };
-    return () => socket.close();
+    // Auth-rejected (1008) or network failure: degrade silently, the page still loaded once.
+    socket.onerror = () => undefined;
+    return () => {
+      if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) {
+        socket.close();
+      }
+    };
   }, [studyId, load]);
 
   async function handleSave() {
@@ -135,7 +148,11 @@ export default function StudyResultsPage() {
         ) : null}
       </header>
 
-      {error ? <p className="mb-4 text-sm text-crit">{error}</p> : null}
+      {error ? (
+        <p role="alert" className="mb-4 text-sm text-crit">
+          {error}
+        </p>
+      ) : null}
 
       <main className="grid flex-1 gap-6 py-2 lg:grid-cols-2">
         <Card className="p-6 shadow-soft">
