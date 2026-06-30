@@ -66,6 +66,12 @@ def test_series_listing_and_instance_serving(
     )
     assert missing.status_code == 404
 
+    # The viewer fetches rendered PNG frames (window/level applied server-side).
+    frame = client.get(f"/api/v1/studies/{sid}/series/{ct_series['id']}/frames/0", headers=headers)
+    assert frame.status_code == 200
+    assert frame.headers["content-type"] == "image/png"
+    assert frame.content[:8] == b"\x89PNG\r\n\x1a\n"
+
 
 def test_instance_gone_when_purged(
     client: TestClient, db_session: Session, object_storage: object, monkeypatch: pytest.MonkeyPatch

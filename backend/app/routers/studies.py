@@ -45,6 +45,7 @@ from app.services.erasure import erase_study
 from app.services.history import prior_studies
 from app.services.ingestion import ingest_study
 from app.services.pipeline import run_pipeline
+from app.services.rendering import render_frame_png
 from app.services.report_generation import get_report_generator
 from app.services.segmentation import get_segmenter
 from app.services.storage import ObjectStorage, get_storage
@@ -205,6 +206,33 @@ def get_instance(
     if not storage.exists(key):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Instance introuvable.")
     return Response(content=storage.read_bytes(key), media_type="application/dicom")
+
+
+@router.get("/{study_id}/series/{series_id}/frames/{index}")
+def get_frame(
+    study_id: uuid.UUID,
+    series_id: uuid.UUID,
+    index: int,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: CurrentUser,
+    storage: Annotated[ObjectStorage, Depends(get_storage)],
+    window: Annotated[float | None, Query()] = None,
+    level: Annotated[float | None, Query()] = None,
+) -> Response:
+    """Render one DICOM frame to PNG (window/level applied) for the viewer."""
+    study = _get_visible_study(db, study_id, current_user)
+    series = next((s for s in study.series if s.id == series_id), None)
+    if series is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Série introuvable.")
+    if series.purged:
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE, detail="Données DICOM brutes supprimées (rétention)."
+        )
+    key = f"{series.storage_path}/{index:04d}.dcm"
+    if not storage.exists(key):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Instance introuvable.")
+    png = render_frame_png(storage.read_bytes(key), window=window, level=level)
+    return Response(content=png, media_type="image/png")
 
 
 @router.get("/{study_id}/segmentation", response_model=list[OrganMeasurementRead])

@@ -141,11 +141,19 @@ export default function StudyResultsPage() {
             Scinti<span className="bg-grad-hot bg-clip-text text-transparent">a</span>
           </span>
         </Link>
-        {results ? (
-          <Badge tone="info">
-            {results.study.exam_type} · {liveStatus ?? results.study.status}
-          </Badge>
-        ) : null}
+        <div className="flex items-center gap-4">
+          <Link
+            href={`/studies/${studyId}/viewer`}
+            className="font-mono text-xs uppercase tracking-[0.1em] text-muted hover:text-ink-200"
+          >
+            Visualiseur DICOM →
+          </Link>
+          {results ? (
+            <Badge tone="info">
+              {results.study.exam_type} · {liveStatus ?? results.study.status}
+            </Badge>
+          ) : null}
+        </div>
       </header>
 
       {error ? (

@@ -173,6 +173,42 @@ export async function validateReport(studyId: string): Promise<ReportRead> {
   return request<ReportRead>(`/api/v1/studies/${studyId}/report/validate`, { method: "POST" });
 }
 
+export interface SeriesRead {
+  id: string;
+  kind: string;
+  instances: number;
+  anonymized: boolean;
+  purged: boolean;
+}
+
+export async function listSeries(studyId: string): Promise<SeriesRead[]> {
+  return request<SeriesRead[]>(`/api/v1/studies/${studyId}/series`);
+}
+
+/**
+ * Fetch a server-rendered PNG frame as an object URL. The frame endpoint needs an
+ * Authorization header, so it cannot be used directly as an <img src>.
+ */
+export async function fetchFrame(
+  studyId: string,
+  seriesId: string,
+  index: number,
+  windowWidth?: number,
+  level?: number,
+): Promise<string> {
+  const token = getToken();
+  const params = new URLSearchParams();
+  if (windowWidth !== undefined) params.set("window", String(windowWidth));
+  if (level !== undefined) params.set("level", String(level));
+  const query = params.toString() ? `?${params.toString()}` : "";
+  const response = await fetch(
+    `${API_BASE}/api/v1/studies/${studyId}/series/${seriesId}/frames/${index}${query}`,
+    { headers: token ? { Authorization: `Bearer ${token}` } : undefined },
+  );
+  if (!response.ok) throw new Error("Image indisponible.");
+  return URL.createObjectURL(await response.blob());
+}
+
 export async function exportPdf(studyId: string): Promise<Blob> {
   const token = getToken();
   const response = await fetch(`${API_BASE}/api/v1/studies/${studyId}/export?format=pdf`, {
