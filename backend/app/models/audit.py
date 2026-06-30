@@ -20,7 +20,11 @@ class AuditLog(TimestampMixin, Base):
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
-    study_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("studies.id"))
+    # SET NULL (not CASCADE): the append-only log survives a study's erasure; only
+    # the link to the now-deleted study is cleared (right-to-erasure, docs/05).
+    study_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("studies.id", ondelete="SET NULL")
+    )
     action: Mapped[str] = mapped_column(String(128), nullable=False)  # e.g. study.upload
     details: Mapped[dict[str, object] | None] = mapped_column(JSONType)
     ip: Mapped[str | None] = mapped_column(INETType)

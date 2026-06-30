@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.audit import record_audit
+from app.core.authz import can_view_study
 from app.core.config import get_settings
 from app.core.crypto import decrypt_identity
 from app.core.db import get_db
@@ -27,9 +28,9 @@ from app.services.report_generation import EXAM_LABELS, get_report_generator
 router = APIRouter(prefix="/studies/{study_id}", tags=["reports"])
 
 
-def _get_study(db: Session, study_id: uuid.UUID) -> Study:
+def _get_study(db: Session, study_id: uuid.UUID, user: User) -> Study:
     study = db.get(Study, study_id)
-    if study is None:
+    if study is None or not can_view_study(user, study):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Examen introuvable.")
     return study
 
@@ -60,7 +61,7 @@ def create_report(
     db: Annotated[Session, Depends(get_db)],
     current_user: CurrentUser,
 ) -> ReportRead:
-    study = _get_study(db, study_id)
+    study = _get_study(db, study_id, current_user)
     report = generate_report(db, study=study, generator=get_report_generator())
     record_audit(db, action="report.generate", user_id=current_user.id, study_id=study_id)
     return _to_read(study, report)
@@ -72,7 +73,7 @@ def read_report(
     db: Annotated[Session, Depends(get_db)],
     current_user: CurrentUser,
 ) -> ReportRead:
-    study = _get_study(db, study_id)
+    study = _get_study(db, study_id, current_user)
     return _to_read(study, _get_report(db, study_id))
 
 
@@ -83,7 +84,7 @@ def edit_report(
     db: Annotated[Session, Depends(get_db)],
     current_user: CurrentUser,
 ) -> ReportRead:
-    study = _get_study(db, study_id)
+    study = _get_study(db, study_id, current_user)
     report = _get_report(db, study_id)
     try:
         save_edit(db, report=report, content=payload.content, author_id=current_user.id)
@@ -99,7 +100,7 @@ def validate(
     db: Annotated[Session, Depends(get_db)],
     validator: Annotated[User, require_roles(Role.medecin)],
 ) -> ReportRead:
-    study = _get_study(db, study_id)
+    study = _get_study(db, study_id, validator)
     report = _get_report(db, study_id)
     try:
         validate_report(db, report=report, validator_id=validator.id)
@@ -116,7 +117,7 @@ def export_report(
     current_user: CurrentUser,
     export_format: Annotated[str, Query(alias="format")] = "pdf",
 ) -> Response:
-    study = _get_study(db, study_id)
+    study = _get_study(db, study_id, current_user)
     report = _get_report(db, study_id)
     if report.status is not ReportStatus.validated:
         raise HTTPException(

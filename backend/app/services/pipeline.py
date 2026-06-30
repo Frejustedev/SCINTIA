@@ -13,12 +13,15 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
+from app.core.audit import record_audit
+from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.models.enums import StudyStatus
 from app.models.study import Study
 from app.services.analysis import run_analysis
 from app.services.report import generate_report
 from app.services.report_generation import ReportGenerator
+from app.services.retention import purge_raw_series
 from app.services.segmentation import Segmenter, run_segmentation
 from app.services.storage import ObjectStorage
 
@@ -45,6 +48,14 @@ def run_pipeline(
 
         run_analysis(db, study=study)
         generate_report(db, study=study, generator=generator)  # sets status -> ready
+
+        # Data minimization: optionally drop the raw DICOM once results exist.
+        if get_settings().purge_raw_dicom_after_analysis:
+            purged = purge_raw_series(db, storage, study=study)
+            if purged:
+                record_audit(
+                    db, action="dicom.purge", study_id=study.id, details={"series": purged}
+                )
         return study
     except Exception:
         # Keep the patient-facing message generic; the detail (which may reference

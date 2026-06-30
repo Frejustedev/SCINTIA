@@ -15,6 +15,7 @@ from fastapi import (
     Depends,
     HTTPException,
     Query,
+    Response,
     UploadFile,
     WebSocket,
     WebSocketDisconnect,
@@ -24,11 +25,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.audit import record_audit
+from app.core.authz import can_view_study, study_visibility_clause
 from app.core.config import get_settings
 from app.core.db import get_db
 from app.core.security import CurrentUser, decode_token
 from app.models.clinical import ExamScore, OrganMeasurement
-from app.models.enums import SeriesKind, StudyStatus
+from app.models.enums import Role, SeriesKind, StudyStatus
 from app.models.report import Report
 from app.models.study import Study
 from app.models.user import User
@@ -37,6 +39,7 @@ from app.schemas.ingestion import IngestionSummary
 from app.schemas.results import StudyResults
 from app.schemas.segmentation import MeasurementCorrection, OrganMeasurementRead
 from app.schemas.study import StudyCreate, StudyRead
+from app.services.erasure import erase_study
 from app.services.ingestion import ingest_study
 from app.services.pipeline import run_pipeline
 from app.services.report_generation import get_report_generator
@@ -55,6 +58,14 @@ def _to_read(study: Study) -> StudyRead:
         patient_pseudonym=study.patient.pseudonym,
         created_at=study.created_at,
     )
+
+
+def _get_visible_study(db: Session, study_id: uuid.UUID, user: User) -> Study:
+    """Fetch a study the user is allowed to see, else 404 (no existence disclosure)."""
+    study = db.get(Study, study_id)
+    if study is None or not can_view_study(user, study):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Examen introuvable.")
+    return study
 
 
 @router.post("", response_model=StudyRead, status_code=status.HTTP_201_CREATED)
@@ -96,7 +107,11 @@ def list_studies(
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[StudyRead]:
     studies = db.scalars(
-        select(Study).order_by(Study.created_at.desc()).limit(limit).offset(offset)
+        select(Study)
+        .where(study_visibility_clause(current_user))
+        .order_by(Study.created_at.desc())
+        .limit(limit)
+        .offset(offset)
     )
     return [_to_read(s) for s in studies]
 
@@ -107,10 +122,7 @@ def get_study(
     db: Annotated[Session, Depends(get_db)],
     current_user: CurrentUser,
 ) -> StudyRead:
-    study = db.get(Study, study_id)
-    if study is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Examen introuvable.")
-    return _to_read(study)
+    return _to_read(_get_visible_study(db, study_id, current_user))
 
 
 @router.post("/{study_id}/files", response_model=IngestionSummary)
@@ -122,9 +134,7 @@ async def upload_files(
     storage: Annotated[ObjectStorage, Depends(get_storage)],
 ) -> IngestionSummary:
     """Upload DICOM files: they are de-identified and separated CT/SPECT, then stored."""
-    study = db.get(Study, study_id)
-    if study is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Examen introuvable.")
+    study = _get_visible_study(db, study_id, current_user)
     blobs = [await file.read() for file in files]
     key = get_settings().identity_encryption_key or ""
     result = ingest_study(db, storage, study=study, blobs=blobs, identity_key=key)
@@ -156,8 +166,7 @@ def list_segmentation(
     db: Annotated[Session, Depends(get_db)],
     current_user: CurrentUser,
 ) -> list[OrganMeasurement]:
-    if db.get(Study, study_id) is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Examen introuvable.")
+    _get_visible_study(db, study_id, current_user)
     return list(
         db.scalars(
             select(OrganMeasurement)
@@ -176,6 +185,7 @@ def correct_measurement(
     current_user: CurrentUser,
 ) -> OrganMeasurement:
     """Manually correct a segmentation-derived volume (mandatory clinical capability)."""
+    _get_visible_study(db, study_id, current_user)
     measurement = db.get(OrganMeasurement, measurement_id)
     if measurement is None or measurement.study_id != study_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Mesure introuvable.")
@@ -198,8 +208,7 @@ def get_score(
     db: Annotated[Session, Depends(get_db)],
     current_user: CurrentUser,
 ) -> ExamScore | None:
-    if db.get(Study, study_id) is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Examen introuvable.")
+    _get_visible_study(db, study_id, current_user)
     return db.scalar(
         select(ExamScore).where(ExamScore.study_id == study_id).order_by(ExamScore.id.desc())
     )
@@ -217,9 +226,7 @@ def analyze(
     Synchronous in Phase 1; on a deployed stack this enqueues a Celery task
     (app.workers.tasks.run_pipeline_task) so GPU work runs off the request.
     """
-    study = db.get(Study, study_id)
-    if study is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Examen introuvable.")
+    study = _get_visible_study(db, study_id, current_user)
     if not any(series.kind is SeriesKind.ct for series in study.series):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -257,9 +264,7 @@ def get_results(
     db: Annotated[Session, Depends(get_db)],
     current_user: CurrentUser,
 ) -> StudyResults:
-    study = db.get(Study, study_id)
-    if study is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Examen introuvable.")
+    study = _get_visible_study(db, study_id, current_user)
     organs = list(
         db.scalars(
             select(OrganMeasurement)
@@ -277,6 +282,25 @@ def get_results(
         score=ExamScoreRead.model_validate(score) if score is not None else None,
         report_status=report.status if report is not None else None,
     )
+
+
+@router.delete("/{study_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_study(
+    study_id: uuid.UUID,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: CurrentUser,
+    storage: Annotated[ObjectStorage, Depends(get_storage)],
+) -> Response:
+    """Right-to-erasure (RGPD / loi 18-07): irreversibly delete a study and, if the
+    patient is left with no other study, the encrypted identity. Admin / médecin only.
+    """
+    if current_user.role not in (Role.admin, Role.medecin):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé pour ce rôle."
+        )
+    study = _get_visible_study(db, study_id, current_user)
+    erase_study(db, storage, study=study, actor_id=current_user.id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 _TERMINAL_STATUSES = {StudyStatus.ready, StudyStatus.error}
@@ -302,8 +326,14 @@ async def progress(
     except Exception:
         await websocket.close(code=1008)
         return
-    if db.get(User, user_id) is None:
+    user = db.get(User, user_id)
+    if user is None:
         await websocket.close(code=1008)
+        return
+    initial = db.get(Study, study_id)
+    if initial is None or not can_view_study(user, initial):
+        await websocket.send_json({"status": "not_found", "error": None})
+        await websocket.close()
         return
 
     try:

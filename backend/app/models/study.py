@@ -54,6 +54,8 @@ class StudySeries(Base):
     kind: Mapped[SeriesKind] = mapped_column(pg_enum(SeriesKind, "series_kind"), nullable=False)
     storage_path: Mapped[str] = mapped_column(String(1024), nullable=False)
     anonymized: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Raw DICOM blobs deleted after analysis (data-retention / minimization, docs/05).
+    purged: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     # For multi-time-point dosimetry.
     time_point: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # De-identified, useful DICOM tags only.

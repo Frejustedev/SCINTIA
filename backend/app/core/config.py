@@ -40,6 +40,11 @@ class Settings(BaseSettings):
     # ── Object storage (local volume by default; MinIO later) ──
     storage_dir: str = "data/objects"
 
+    # ── Data retention (minimization) ──
+    # When true, raw DICOM blobs are deleted once analysis has succeeded; the
+    # derived measurements/score/report (no pixel data) are kept.
+    purge_raw_dicom_after_analysis: bool = False
+
     # ── Segmentation backend: "stub" (offline) | "totalsegmentator" (GPU) ──
     segmenter_backend: str = "stub"
 
