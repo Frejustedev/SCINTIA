@@ -39,6 +39,7 @@ from app.schemas.history import StudyHistoryEntry
 from app.schemas.ingestion import IngestionSummary
 from app.schemas.results import StudyResults
 from app.schemas.segmentation import MeasurementCorrection, OrganMeasurementRead
+from app.schemas.series import StudySeriesRead
 from app.schemas.study import StudyCreate, StudyRead
 from app.services.erasure import erase_study
 from app.services.history import prior_studies
@@ -160,6 +161,50 @@ async def upload_files(
         instances=result.instances,
         skipped=result.skipped,
     )
+
+
+@router.get("/{study_id}/series", response_model=list[StudySeriesRead])
+def list_series(
+    study_id: uuid.UUID,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: CurrentUser,
+) -> list[StudySeriesRead]:
+    """List the study's DICOM series (for the viewer to load instances)."""
+    study = _get_visible_study(db, study_id, current_user)
+    return [
+        StudySeriesRead(
+            id=series.id,
+            kind=series.kind,
+            instances=int(str((series.series_metadata or {}).get("instances", 0))),
+            anonymized=series.anonymized,
+            purged=series.purged,
+        )
+        for series in study.series
+    ]
+
+
+@router.get("/{study_id}/series/{series_id}/instances/{index}")
+def get_instance(
+    study_id: uuid.UUID,
+    series_id: uuid.UUID,
+    index: int,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: CurrentUser,
+    storage: Annotated[ObjectStorage, Depends(get_storage)],
+) -> Response:
+    """Serve one de-identified DICOM instance (wadouri source for the viewer)."""
+    study = _get_visible_study(db, study_id, current_user)
+    series = next((s for s in study.series if s.id == series_id), None)
+    if series is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Série introuvable.")
+    if series.purged:
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE, detail="Données DICOM brutes supprimées (rétention)."
+        )
+    key = f"{series.storage_path}/{index:04d}.dcm"
+    if not storage.exists(key):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Instance introuvable.")
+    return Response(content=storage.read_bytes(key), media_type="application/dicom")
 
 
 @router.get("/{study_id}/segmentation", response_model=list[OrganMeasurementRead])
