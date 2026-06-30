@@ -14,6 +14,7 @@ import {
   getReport,
   getResults,
   getToken,
+  progressSocketUrl,
   validateReport,
   type ReportRead,
   type StudyResults,
@@ -35,6 +36,7 @@ export default function StudyResultsPage() {
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [liveStatus, setLiveStatus] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const data = await getResults(studyId);
@@ -55,6 +57,19 @@ export default function StudyResultsPage() {
     }
     load().catch((err) => setError((err as Error).message));
   }, [load, router]);
+
+  useEffect(() => {
+    if (!getToken()) return undefined;
+    const socket = new WebSocket(progressSocketUrl(studyId));
+    socket.onmessage = (event) => {
+      const data = JSON.parse(event.data) as { status: string };
+      setLiveStatus(data.status);
+      if (data.status === "ready") {
+        load().catch(() => undefined);
+      }
+    };
+    return () => socket.close();
+  }, [studyId, load]);
 
   async function handleSave() {
     setBusy(true);
@@ -115,7 +130,7 @@ export default function StudyResultsPage() {
         </Link>
         {results ? (
           <Badge tone="info">
-            {results.study.exam_type} · {results.study.status}
+            {results.study.exam_type} · {liveStatus ?? results.study.status}
           </Badge>
         ) : null}
       </header>

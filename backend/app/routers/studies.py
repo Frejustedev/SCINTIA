@@ -6,21 +6,23 @@ pseudonymized patient and starts in the ``uploaded`` state.
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, WebSocket, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.audit import record_audit
 from app.core.config import get_settings
 from app.core.db import get_db
-from app.core.security import CurrentUser
+from app.core.security import CurrentUser, decode_token
 from app.models.clinical import ExamScore, OrganMeasurement
-from app.models.enums import SeriesKind
+from app.models.enums import SeriesKind, StudyStatus
 from app.models.report import Report
 from app.models.study import Study
+from app.models.user import User
 from app.schemas.analysis import ExamScoreRead
 from app.schemas.ingestion import IngestionSummary
 from app.schemas.results import StudyResults
@@ -260,3 +262,43 @@ def get_results(
         score=ExamScoreRead.model_validate(score) if score is not None else None,
         report_status=report.status if report is not None else None,
     )
+
+
+_TERMINAL_STATUSES = {StudyStatus.ready, StudyStatus.error}
+
+
+@router.websocket("/{study_id}/progress")
+async def progress(
+    websocket: WebSocket,
+    study_id: uuid.UUID,
+    db: Annotated[Session, Depends(get_db)],
+    token: str | None = None,
+) -> None:
+    """Stream the study status until it reaches a terminal state.
+
+    The JWT is passed as a query param (browsers cannot set WebSocket headers).
+    With the Celery execution path this reflects real-time pipeline progress; with
+    the synchronous path it emits the final status immediately.
+    """
+    await websocket.accept()
+    try:
+        payload = decode_token(token or "")
+        user_id = uuid.UUID(str(payload.get("sub")))
+    except Exception:
+        await websocket.close(code=1008)
+        return
+    if db.get(User, user_id) is None:
+        await websocket.close(code=1008)
+        return
+
+    for _ in range(240):
+        db.expire_all()
+        study = db.get(Study, study_id)
+        if study is None:
+            await websocket.send_json({"status": "not_found", "error": None})
+            break
+        await websocket.send_json({"status": study.status.value, "error": study.error_message})
+        if study.status in _TERMINAL_STATUSES:
+            break
+        await asyncio.sleep(0.5)
+    await websocket.close()

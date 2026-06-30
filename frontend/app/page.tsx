@@ -23,6 +23,12 @@ export default function Home() {
         <div className="flex items-center gap-4">
           <Badge tone="info">{t.home.researchBadge}</Badge>
           <Link
+            href="/studies"
+            className="font-mono text-xs uppercase tracking-[0.1em] text-iris hover:underline"
+          >
+            Examens
+          </Link>
+          <Link
             href="/login"
             className="font-mono text-xs uppercase tracking-[0.1em] text-iris hover:underline"
           >

@@ -129,6 +129,17 @@ export async function createStudy(examType: string, patient: PatientInput): Prom
   return request<StudyRead>("/api/v1/studies", jsonInit("POST", { exam_type: examType, patient }));
 }
 
+export async function listStudies(): Promise<StudyRead[]> {
+  return request<StudyRead[]>("/api/v1/studies");
+}
+
+/** WebSocket URL streaming pipeline status (token passed as query param). */
+export function progressSocketUrl(studyId: string): string {
+  const token = getToken() ?? "";
+  const wsBase = API_BASE.replace(/^http/, "ws");
+  return `${wsBase}/api/v1/studies/${studyId}/progress?token=${encodeURIComponent(token)}`;
+}
+
 export async function uploadFiles(studyId: string, files: File[]): Promise<IngestionSummary> {
   const form = new FormData();
   for (const file of files) form.append("files", file);
