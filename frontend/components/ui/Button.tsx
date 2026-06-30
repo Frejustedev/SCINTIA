@@ -16,11 +16,7 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 /** Charte-compliant button. Labels are imperative and constant across a flow. */
-export function Button({
-  variant = "primary",
-  className = "",
-  ...props
-}: ButtonProps) {
+export function Button({ variant = "primary", className = "", ...props }: ButtonProps) {
   return (
     <button
       className={[

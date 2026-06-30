@@ -22,11 +22,7 @@ export function UploadZone() {
         className="text-muted"
         aria-hidden="true"
       >
-        <path
-          d="M12 16V4m0 0L8 8m4-4 4 4"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
+        <path d="M12 16V4m0 0L8 8m4-4 4 4" strokeLinecap="round" strokeLinejoin="round" />
         <path
           d="M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"
           strokeLinecap="round"

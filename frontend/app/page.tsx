@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { ExamTypeSelect } from "@/components/ExamTypeSelect";
 import { Logo } from "@/components/Logo";
 import { Badge } from "@/components/ui/Badge";
@@ -18,7 +20,15 @@ export default function Home() {
             Scinti<span className="bg-grad-hot bg-clip-text text-transparent">a</span>
           </span>
         </div>
-        <Badge tone="info">{t.home.researchBadge}</Badge>
+        <div className="flex items-center gap-4">
+          <Badge tone="info">{t.home.researchBadge}</Badge>
+          <Link
+            href="/login"
+            className="font-mono text-xs uppercase tracking-[0.1em] text-iris hover:underline"
+          >
+            Se connecter
+          </Link>
+        </div>
       </header>
 
       {/* Hero */}
@@ -26,9 +36,7 @@ export default function Home() {
         <section className="max-w-2xl">
           <h1 className="font-display text-4xl font-semibold tracking-tight text-ink-100">
             {t.tagline.before}
-            <span className="bg-grad-hot bg-clip-text text-transparent">
-              {t.tagline.accent}
-            </span>
+            <span className="bg-grad-hot bg-clip-text text-transparent">{t.tagline.accent}</span>
             {t.tagline.after}
           </h1>
           <p className="mt-4 text-base text-ink-300">{t.sub}</p>
@@ -40,15 +48,22 @@ export default function Home() {
             {t.home.eyebrow}
           </p>
 
-          <h2 className="mb-3 font-display text-lg text-ink-100">
-            {t.home.chooseExam}
-          </h2>
+          <h2 className="mb-3 font-display text-lg text-ink-100">{t.home.chooseExam}</h2>
           <ExamTypeSelect />
 
           <div className="mt-6">
             <UploadZone />
           </div>
         </Card>
+
+        <div className="flex flex-wrap gap-3">
+          <Link
+            href="/studies/new"
+            className="inline-flex min-h-[44px] items-center justify-center rounded-md bg-grad-hot px-5 text-sm font-medium text-ink-900 transition duration-200 ease-soft hover:opacity-95"
+          >
+            Commencer un examen
+          </Link>
+        </div>
       </main>
 
       {/* Footer disclaimer */}

@@ -29,9 +29,7 @@ export function ExamTypeSelect() {
               "flex min-h-[44px] flex-col items-start gap-0.5 rounded-md border px-4 py-3 text-left",
               "transition duration-200 ease-soft",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-iris",
-              active
-                ? "border-iris bg-iris/10"
-                : "border-border bg-surface hover:border-ink-400",
+              active ? "border-iris bg-iris/10" : "border-border bg-surface hover:border-ink-400",
             ].join(" ")}
           >
             <span className="text-sm font-medium text-ink-100">{option.label}</span>

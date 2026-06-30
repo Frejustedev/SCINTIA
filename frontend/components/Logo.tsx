@@ -3,13 +3,7 @@
  * (docs/03_CHARTE_GRAPHIQUE.md §2). Decorative; pair with the wordmark for the
  * full lockup.
  */
-export function Logo({
-  size = 40,
-  className,
-}: {
-  size?: number;
-  className?: string;
-}) {
+export function Logo({ size = 40, className }: { size?: number; className?: string }) {
   return (
     <svg
       width={size}
@@ -54,13 +48,7 @@ export function Logo({
       />
       {/* Charter §9 signature motion: gentle breathing of the luminous core.
           Disabled under prefers-reduced-motion (globals.css). */}
-      <circle
-        cx="40.5"
-        cy="25.5"
-        r="13"
-        fill="url(#scintia-core)"
-        className="animate-breathe"
-      />
+      <circle cx="40.5" cy="25.5" r="13" fill="url(#scintia-core)" className="animate-breathe" />
       <circle cx="40.5" cy="25.5" r="7.4" fill="url(#scintia-core)" />
     </svg>
   );

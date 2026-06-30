@@ -41,7 +41,9 @@ Suit [`docs/06_ROADMAP.md`](docs/06_ROADMAP.md). Une phase à la fois.
 **1.4 Compte-rendu** — [x] interface `ReportGenerator` : `TemplateReportGenerator` (offline, **sans invention**) + adaptateur `ClaudeReportGenerator` (zéro-rétention, clé requise) ; **bandeau non supprimable** ; brouillon/édition/validation (verrou, **médecin only**) + **export PDF** (ré-identification locale, audit `identity.access`/`export.pdf`) + tests. [ ] reste : appel Claude réel via prompt [`docs/08_`](docs/08_PROMPT_CR_SCINTI_OSSEUSE.md).
 **1.5 Chaînage E2E** — [x] orchestration `run_pipeline` (synchrone, offline-testable) : segmentation→quantification→analyse→CR + **machine à états** ; tâche Celery `run_pipeline_task` (prod) ; endpoints `POST /analyze` + `GET /results` ; **test E2E** (ingest→analyze→results→brouillon). [ ] reste : **progression WebSocket** temps réel + exécution Celery réelle (broker) + page résultats (frontend).
 
-> **À valider en conditions réelles (côté porteur)** : GPU NVIDIA (TotalSegmentator), DICOM de test anonymisés, clé Anthropic zéro-rétention.
+**Frontend (flux fonctionnel)** — [x] client API typé (`lib/api.ts`), login + bootstrap admin, nouvel examen (sélecteur + identité + upload → création/anonymisation/analyse), page résultats (table organes/volumes, score + disclaimer proxy, éditeur de CR avec **bandeau non supprimable**, validation médecin, **export PDF**) ; build Next 15 + lint OK. [ ] reste : visualiseur DICOM **Cornerstone3D** + superposition masques, **progression WebSocket**, tableau de bord des examens, mode clair PDF.
+
+> **À valider en conditions réelles (côté porteur)** : GPU NVIDIA (TotalSegmentator), DICOM de test anonymisés, clé Anthropic zéro-rétention, exécution `docker compose up` (Postgres/Redis) + interaction navigateur.
 
 ## Phase 2 — Dosimétrie
 

@@ -29,19 +29,11 @@ export const metadata: Metadata = {
     "compte-rendu — toujours relu et validé par le médecin. Prototype de recherche.",
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{ children: React.ReactNode }>) {
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   // lang=fr / dir=ltr by default. Arabic (RTL) toggles `dir` in a later phase.
   return (
-    <html
-      lang="fr"
-      dir="ltr"
-      className={`${display.variable} ${sans.variable} ${mono.variable}`}
-    >
-      <body className="min-h-screen bg-bg font-sans text-text antialiased">
-        {children}
-      </body>
+    <html lang="fr" dir="ltr" className={`${display.variable} ${sans.variable} ${mono.variable}`}>
+      <body className="min-h-screen bg-bg font-sans text-text antialiased">{children}</body>
     </html>
   );
 }
