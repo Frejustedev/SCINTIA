@@ -32,7 +32,7 @@ def test_schema_creates_and_round_trips() -> None:
 
     with Session(engine) as session:
         user = User(
-            email="medecin@scintia.test",
+            email="medecin@scintia.fr",
             password_hash="not-a-real-hash",
             full_name="Dr Example",
             role=Role.medecin,

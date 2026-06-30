@@ -30,10 +30,10 @@ Suit [`docs/06_ROADMAP.md`](docs/06_ROADMAP.md). Une phase à la fois.
 - [x] Modèle de données SQLAlchemy (15 tables) + enums centralisés.
 - [x] Session DB + scaffold Alembic (migration auto-générée au 1er run Postgres).
 - [x] **Service d'anonymisation DICOM** (PS3.15 : PHI, dates décalées, UID remappés, tags privés) + crypto identité (Fernet) + tests de sécurité.
-- [ ] Auth/RBAC (argon2 + JWT, 4 rôles) + writer de journal d'audit append-only.
-- [ ] Abstraction stockage objet (volume local) + cycle de vie des DICOM bruts.
-- [ ] Worker Celery (broker/result) + tâche pipeline + machine à états `study.status`.
-- [ ] Routers : auth, studies (création/upload).
+- [x] Auth/RBAC (argon2 + JWT, 4 rôles) + writer de journal d'audit append-only.
+- [x] Abstraction stockage objet (volume local, anti-traversal) + tests.
+- [x] Routers : `auth` (login/me), `users` (bootstrap-admin/CRUD admin), `studies` (create/list/get) + tests d'intégration.
+- [ ] Worker Celery (broker/result) + tâche pipeline + machine à états `study.status` *(câblé en 1.1 avec l'ingestion)*.
 
 **1.1 Ingestion** — upload (dossier/ZIP/DICOMDIR), parse pydicom, anonymise, **tri CT/SPECT**, DICOM→NIfTI.
 **1.2 Segmentation** — TotalSegmentator (worker, GPU), volumes mL, **édition manuelle des masques**, visualiseur Cornerstone3D.

@@ -8,7 +8,7 @@ degrade gracefully on other backends.
 from __future__ import annotations
 
 import enum
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import TypeVar
 
 from sqlalchemy import DateTime, String, func
@@ -36,8 +36,16 @@ def pg_enum(enum_cls: type[_E], name: str) -> SAEnum:
 
 
 class TimestampMixin:
-    """Adds a server-defaulted ``created_at`` (timestamptz) column."""
+    """Adds a ``created_at`` (timestamptz) column.
+
+    A Python-side default populates the attribute immediately (so it is available
+    for serialization right after flush, including on SQLite), while the
+    server_default covers inserts that bypass the ORM (migrations, raw SQL).
+    """
 
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        server_default=func.now(),
+        nullable=False,
     )

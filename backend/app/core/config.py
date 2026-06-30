@@ -33,6 +33,13 @@ class Settings(BaseSettings):
     backend_port: int = 8000
     backend_cors_origins: str = "http://localhost:3000"
 
+    # ── Auth ──
+    jwt_algorithm: str = "HS256"
+    access_token_expire_minutes: int = 720  # 12 h
+
+    # ── Object storage (local volume by default; MinIO later) ──
+    storage_dir: str = "data/objects"
+
     # ── Datastores (not connected in Phase 0, declared for later phases) ──
     database_url: str | None = None
     redis_url: str | None = None

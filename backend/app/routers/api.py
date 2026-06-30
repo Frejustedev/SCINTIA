@@ -1,15 +1,12 @@
-"""Aggregate router for versioned business endpoints (mounted under /api/v1).
-
-Empty in Phase 0. Pipeline endpoints (studies, reports, calibration, auth,
-export — see docs/02_ARCHITECTURE.md §5) are added in later phases.
-"""
+"""Aggregate router for versioned business endpoints (mounted under /api/v1)."""
 
 from __future__ import annotations
 
 from fastapi import APIRouter
 
-api_router = APIRouter()
+from app.routers import auth, studies, users
 
-# Future routers are included here, e.g.:
-#     from app.routers import studies
-#     api_router.include_router(studies.router)
+api_router = APIRouter()
+api_router.include_router(auth.router)
+api_router.include_router(users.router)
+api_router.include_router(studies.router)
