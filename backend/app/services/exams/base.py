@@ -1,30 +1,43 @@
-"""Strategy interface for per-exam analysis.
+"""Strategy interface for per-exam analysis (docs/02_ARCHITECTURE.md §3).
 
-Defines the contract only — no clinical logic. Concrete analyzers
-(BoneScanAnalyzer, MyocardialSpectAnalyzer, MibgAnalyzer, OctreotideAnalyzer,
-ParathyroidAnalyzer, LungVQAnalyzer) arrive in Phase 1+.
+Each exam type has its own analyzer (BoneScanAnalyzer, MyocardialSpectAnalyzer,
+MibgAnalyzer, OctreotideAnalyzer, ParathyroidAnalyzer, LungVQAnalyzer). Adding an
+exam = adding a class, without touching the rest.
+
+Analyzers compute *factual* scores/summaries from the measurements; they never
+interpret or diagnose — the physician validates everything.
 """
 
 from __future__ import annotations
 
-from typing import Any, Protocol, runtime_checkable
+from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
+from typing import Any
+
+from app.models.clinical import Lesion, OrganMeasurement
+from app.models.enums import ExamType, ScoreType
 
 
-@runtime_checkable
-class ExamAnalyzer(Protocol):
-    """Common interface for all exam analyzers.
+@dataclass(frozen=True)
+class ExamResult:
+    """Output of an analyzer: a standardized score plus a factual summary."""
 
-    Mirrors ``ExamAnalyzer.analyze(study, organs, quantification, dosimetry)
-    -> ExamResult`` from docs/02_ARCHITECTURE.md §3. Concrete signatures are
-    typed precisely once the data models exist.
-    """
+    score_type: ScoreType
+    score_value: str
+    summary: str
+    details: dict[str, Any] = field(default_factory=dict)
 
+
+class ExamAnalyzer(ABC):
+    """Common interface for all exam analyzers."""
+
+    exam_type: ExamType
+    model_version: str = "abstract"
+
+    @abstractmethod
     def analyze(
         self,
-        study: Any,
-        organs: Any,
-        quantification: Any,
-        dosimetry: Any | None = None,
-    ) -> Any:
-        """Apply the exam-specific score/analysis and return an ExamResult."""
-        ...
+        *,
+        organs: list[OrganMeasurement],
+        lesions: list[Lesion],
+    ) -> ExamResult: ...

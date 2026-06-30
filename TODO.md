@@ -37,7 +37,7 @@ Suit [`docs/06_ROADMAP.md`](docs/06_ROADMAP.md). Une phase à la fois.
 
 **1.1 Ingestion** — [x] upload multi-fichiers, parse pydicom, **anonymisation avant stockage**, **tri CT/SPECT** (par Modality), stockage objet par série + tests. [ ] reste : extraction ZIP/DICOMDIR, conversion DICOM→NIfTI (faite en 1.2 pour la segmentation), passage en tâche Celery.
 **1.2 Segmentation** — [x] interface `Segmenter` + `StubSegmenter` (offline), `run_segmentation` (volumes mL → `organ_measurements`), **correction manuelle** (PATCH) + tests. [ ] adaptateur **TotalSegmentator** réel (GPU, DICOM→NIfTI, `--statistics`/`--roi_subset`), masques NIfTI stockés + visualiseur Cornerstone3D (frontend).
-**1.3 Quantification + analyseur osseux** — recalage rigide, counts→activité, ratios, détection de foyers + **BSI** (`BoneScanAnalyzer`).
+**1.3 Quantification + analyseur osseux** — [x] formules quantification (counts→activité, %AI, ratios) testées ; framework `ExamAnalyzer` (stratégie) + `BoneScanAnalyzer` (**proxy BSI transparent, NON validé cliniquement** + flag) + `run_analysis` + endpoint `/score` + tests. [ ] **À valider avec le médecin nucléaire** : recalage SPECT/CT + échantillonnage des coups dans les masques + **détection de foyers** (données réelles) + **méthode BSI validée**.
 **1.4 Compte-rendu** — contexte anonymisé → **Claude (zéro-rétention)** via [`docs/08_`](docs/08_PROMPT_CR_SCINTI_OSSEUSE.md), bandeau non supprimable, éditeur, validation/signature, **export PDF** (ré-id locale).
 **1.5 Chaînage E2E** — pipeline Celery + progression WebSocket + page résultats + démo DoD.
 
