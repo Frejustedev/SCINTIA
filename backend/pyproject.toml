@@ -92,3 +92,8 @@ python_version = "3.12"
 strict = true
 ignore_missing_imports = true
 plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+# The segmentation adapter calls SimpleITK (untyped, no stubs) for DICOM→NIfTI.
+module = "app.services.segmentation"
+disallow_untyped_calls = false

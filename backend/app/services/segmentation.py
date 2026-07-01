@@ -175,7 +175,20 @@ class TotalSegmentatorSegmenter(Segmenter):
             nifti = tmpdir / "ct.nii.gz"
             dicom_series_to_nifti(ct_instances, nifti)
             outdir = tmpdir / "seg"
-            cmd = [binary, "-i", str(nifti), "-o", str(outdir), "--statistics"]
+            # Single-thread resampling/saving: avoids the process-spawn storm that
+            # thrashes the CPU and triggers multiprocessing failures on Windows.
+            cmd = [
+                binary,
+                "-i",
+                str(nifti),
+                "-o",
+                str(outdir),
+                "--statistics",
+                "--nr_thr_resamp",
+                "1",
+                "--nr_thr_saving",
+                "1",
+            ]
             if self.fast:
                 cmd.append("--fast")
             if self.roi_subset:
@@ -183,7 +196,14 @@ class TotalSegmentatorSegmenter(Segmenter):
             logger.info(
                 "Running TotalSegmentator (fast=%s, %d ROIs)", self.fast, len(self.roi_subset)
             )
-            subprocess.run(cmd, check=True, capture_output=True, text=True)
+            try:
+                subprocess.run(cmd, check=True, capture_output=True, text=True)
+            except subprocess.CalledProcessError as exc:
+                detail = (exc.stderr or exc.stdout or "").strip()
+                logger.error("TotalSegmentator failed (code %s):\n%s", exc.returncode, detail)
+                raise RuntimeError(
+                    f"TotalSegmentator a échoué (code {exc.returncode}). {detail[-600:]}"
+                ) from exc
             stats_path = outdir / "statistics.json"
             if not stats_path.is_file():
                 raise RuntimeError("TotalSegmentator n'a pas produit statistics.json.")
