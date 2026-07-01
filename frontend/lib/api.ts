@@ -185,6 +185,39 @@ export async function listSeries(studyId: string): Promise<SeriesRead[]> {
   return request<SeriesRead[]>(`/api/v1/studies/${studyId}/series`);
 }
 
+export interface SeriesMeta {
+  rows: number;
+  cols: number;
+  instances: number;
+  window_center: number;
+  window_width: number;
+  min: number;
+  max: number;
+  pixel_spacing_mm: [number, number] | null;
+  photometric: string;
+  modality: string;
+  inverted: boolean;
+}
+
+export async function getSeriesMeta(studyId: string, seriesId: string): Promise<SeriesMeta> {
+  return request<SeriesMeta>(`/api/v1/studies/${studyId}/series/${seriesId}/meta`);
+}
+
+/** Raw int16 (rescaled) pixels of a frame; the browser applies window/level. */
+export async function fetchPixels(
+  studyId: string,
+  seriesId: string,
+  index: number,
+): Promise<Int16Array> {
+  const token = getToken();
+  const response = await fetch(
+    `${API_BASE}/api/v1/studies/${studyId}/series/${seriesId}/pixels/${index}`,
+    { headers: token ? { Authorization: `Bearer ${token}` } : undefined },
+  );
+  if (!response.ok) throw new Error("Pixels indisponibles.");
+  return new Int16Array(await response.arrayBuffer());
+}
+
 /**
  * Fetch a server-rendered PNG frame as an object URL. The frame endpoint needs an
  * Authorization header, so it cannot be used directly as an <img src>.

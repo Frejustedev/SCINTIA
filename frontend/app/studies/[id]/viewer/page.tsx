@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect } from "react";
 
-import { DicomViewer } from "@/components/DicomViewer";
+import { DicomViewerPro } from "@/components/DicomViewerPro";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { Logo } from "@/components/Logo";
 import { Card } from "@/components/ui/Card";
@@ -44,7 +44,7 @@ export default function ViewerPage() {
       <main className="flex-1 py-2">
         <Card className="p-6 shadow-soft">
           <h1 className="mb-4 font-display text-lg text-ink-100">{t("viewer.title")}</h1>
-          <DicomViewer studyId={studyId} />
+          <DicomViewerPro studyId={studyId} />
         </Card>
       </main>
 

@@ -32,7 +32,7 @@ from app.core.security import CurrentUser, decode_token
 from app.models.clinical import ExamScore, OrganMeasurement
 from app.models.enums import Role, SeriesKind, StudyStatus
 from app.models.report import Report
-from app.models.study import Study
+from app.models.study import Study, StudySeries
 from app.models.user import User
 from app.schemas.analysis import ExamScoreRead
 from app.schemas.history import StudyHistoryEntry
@@ -45,7 +45,7 @@ from app.services.erasure import erase_study
 from app.services.history import prior_studies
 from app.services.ingestion import ingest_study
 from app.services.pipeline import run_pipeline
-from app.services.rendering import render_frame_png
+from app.services.rendering import extract_pixels, render_frame_png, series_pixel_meta
 from app.services.report_generation import get_report_generator
 from app.services.segmentation import get_segmenter
 from app.services.storage import ObjectStorage, get_storage
@@ -233,6 +233,55 @@ def get_frame(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Instance introuvable.")
     png = render_frame_png(storage.read_bytes(key), window=window, level=level)
     return Response(content=png, media_type="image/png")
+
+
+def _resolve_series(study: Study, series_id: uuid.UUID) -> StudySeries:
+    series = next((s for s in study.series if s.id == series_id), None)
+    if series is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Série introuvable.")
+    if series.purged:
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE, detail="Données DICOM brutes supprimées (rétention)."
+        )
+    return series
+
+
+@router.get("/{study_id}/series/{series_id}/meta")
+def series_meta(
+    study_id: uuid.UUID,
+    series_id: uuid.UUID,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: CurrentUser,
+    storage: Annotated[ObjectStorage, Depends(get_storage)],
+) -> dict[str, object]:
+    """Per-series display metadata (dims, default window/level, spacing) for the pro viewer."""
+    study = _get_visible_study(db, study_id, current_user)
+    series = _resolve_series(study, series_id)
+    key = f"{series.storage_path}/0000.dcm"
+    if not storage.exists(key):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Série vide.")
+    meta = series_pixel_meta(storage.read_bytes(key))
+    meta["instances"] = int(str((series.series_metadata or {}).get("instances", 0)))
+    return meta
+
+
+@router.get("/{study_id}/series/{series_id}/pixels/{index}")
+def series_pixels(
+    study_id: uuid.UUID,
+    series_id: uuid.UUID,
+    index: int,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: CurrentUser,
+    storage: Annotated[ObjectStorage, Depends(get_storage)],
+) -> Response:
+    """Raw int16 (rescaled) pixels of one frame — the browser applies window/level."""
+    study = _get_visible_study(db, study_id, current_user)
+    series = _resolve_series(study, series_id)
+    key = f"{series.storage_path}/{index:04d}.dcm"
+    if not storage.exists(key):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Instance introuvable.")
+    data, _lo, _hi = extract_pixels(storage.read_bytes(key))
+    return Response(content=data, media_type="application/octet-stream")
 
 
 @router.get("/{study_id}/segmentation", response_model=list[OrganMeasurementRead])
