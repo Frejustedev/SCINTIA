@@ -15,7 +15,6 @@ Manual correction of masks remains mandatory before clinical use
 
 from __future__ import annotations
 
-import json
 import shutil
 import subprocess
 import sys
@@ -48,6 +47,36 @@ class OrganVolume:
     organ_name: str
     volume_ml: float
     snomed_code: str | None = None
+    mean_hu: float | None = None
+
+
+def volumes_from_masks(ct_nifti: Path, mask_dir: Path) -> list[OrganVolume]:
+    """Measure each organ mask: volume (voxels × voxel size, mL) + mean HU in the CT.
+
+    Used instead of TotalSegmentator's ``--statistics``, which returns 0 volumes with
+    the ``--fast`` model even when the masks are correctly populated.
+    """
+    import numpy as np
+    import SimpleITK as sitk  # noqa: N813 - conventional alias
+
+    ct = sitk.GetArrayFromImage(sitk.ReadImage(str(ct_nifti)))
+    volumes: list[OrganVolume] = []
+    for mask_file in sorted(mask_dir.glob("*.nii.gz")):
+        image = sitk.ReadImage(str(mask_file))
+        mask = sitk.GetArrayFromImage(image) > 0
+        voxels = int(mask.sum())
+        if voxels == 0:
+            continue
+        voxel_ml = float(np.prod(image.GetSpacing())) / 1000.0
+        mean_hu = float(ct[mask].mean()) if ct.shape == mask.shape else None
+        volumes.append(
+            OrganVolume(
+                organ_name=mask_file.name.removesuffix(".nii.gz"),
+                volume_ml=round(voxels * voxel_ml, 3),
+                mean_hu=round(mean_hu, 1) if mean_hu is not None else None,
+            )
+        )
+    return sorted(volumes, key=lambda v: v.organ_name)
 
 
 def parse_statistics(stats: Mapping[str, Any]) -> list[OrganVolume]:
@@ -183,7 +212,6 @@ class TotalSegmentatorSegmenter(Segmenter):
                 str(nifti),
                 "-o",
                 str(outdir),
-                "--statistics",
                 "--nr_thr_resamp",
                 "1",
                 "--nr_thr_saving",
@@ -204,11 +232,10 @@ class TotalSegmentatorSegmenter(Segmenter):
                 raise RuntimeError(
                     f"TotalSegmentator a échoué (code {exc.returncode}). {detail[-600:]}"
                 ) from exc
-            stats_path = outdir / "statistics.json"
-            if not stats_path.is_file():
-                raise RuntimeError("TotalSegmentator n'a pas produit statistics.json.")
-            stats = json.loads(stats_path.read_text(encoding="utf-8"))
-        return parse_statistics(stats)
+            if not outdir.is_dir() or not any(outdir.glob("*.nii.gz")):
+                raise RuntimeError("TotalSegmentator n'a produit aucun masque.")
+            # Measure volumes from the masks (statistics.json is unreliable with --fast).
+            return volumes_from_masks(nifti, outdir)
 
 
 def get_segmenter() -> Segmenter:
@@ -255,6 +282,7 @@ def run_segmentation(
             organ_name=volume.organ_name,
             snomed_code=volume.snomed_code,
             volume_ml=Decimal(str(volume.volume_ml)),
+            mean_intensity=(Decimal(str(volume.mean_hu)) if volume.mean_hu is not None else None),
             segmentation_corrected=False,
         )
         db.add(measurement)
