@@ -27,7 +27,7 @@ def test_parse_statistics_converts_mm3_to_ml_and_filters() -> None:
 
 
 def test_totalsegmentator_requires_the_binary(monkeypatch: pytest.MonkeyPatch) -> None:
-    # No silent fallback: when the GPU tool is absent, segmentation must fail loudly.
-    monkeypatch.setattr("app.services.segmentation.shutil.which", lambda _name: None)
+    # No silent fallback: when the tool is absent, segmentation must fail loudly.
+    monkeypatch.setattr(TotalSegmentatorSegmenter, "_locate_binary", lambda self: None)
     with pytest.raises(RuntimeError, match="TotalSegmentator introuvable"):
         TotalSegmentatorSegmenter().segment([b"fake-dicom"])

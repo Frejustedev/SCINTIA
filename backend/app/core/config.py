@@ -58,6 +58,8 @@ class Settings(BaseSettings):
     segmenter_backend: str = "stub"
     # Optional comma-separated TotalSegmentator ROI subset (empty = all structures).
     segmenter_roi_subset: str = ""
+    # Faster, lower-resolution model — essential on CPU (no GPU).
+    segmenter_fast: bool = False
 
     # ── Report generation backend: "template" (offline) | "claude" ──
     report_backend: str = "template"

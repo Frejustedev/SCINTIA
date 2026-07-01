@@ -18,6 +18,7 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
+import sys
 import tempfile
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
@@ -139,32 +140,49 @@ class TotalSegmentatorSegmenter(Segmenter):
 
     name = "totalsegmentator-v2"
 
-    def __init__(self, roi_subset: list[str] | None = None) -> None:
+    def __init__(self, roi_subset: list[str] | None = None, fast: bool = False) -> None:
         self.roi_subset = roi_subset or []
+        self.fast = fast
+
+    def _locate_binary(self) -> str | None:
+        """Find the TotalSegmentator CLI on PATH, else next to the interpreter (venv)."""
+        found = shutil.which("TotalSegmentator")
+        if found:
+            return found
+        scripts = Path(sys.executable).parent
+        for name in ("TotalSegmentator.exe", "TotalSegmentator"):
+            candidate = scripts / name
+            if candidate.is_file():
+                return str(candidate)
+        return None
 
     def segment(self, ct_instances: list[bytes]) -> list[OrganVolume]:
         """DICOM → NIfTI → TotalSegmentator (--statistics) → per-organ volumes (mL).
 
-        Raises a clear error (no silent fallback) when the GPU tool is unavailable,
-        so a real measurement is never fabricated.
+        Raises a clear error (no silent fallback) when the tool is unavailable, so a
+        real measurement is never fabricated. Runs on CPU (``--fast``) or GPU.
         """
         if not ct_instances:
             raise RuntimeError("Aucune instance CT à segmenter.")
-        binary = shutil.which("TotalSegmentator")
+        binary = self._locate_binary()
         if binary is None:
             raise RuntimeError(
-                "TotalSegmentator introuvable sur l'hôte (GPU requis). "
-                "Installez-le (`pip install TotalSegmentator`) et exécutez sur une machine GPU."
+                "TotalSegmentator introuvable. Installez-le (`pip install TotalSegmentator`) ; "
+                "un GPU l'accélère mais le CPU fonctionne (mode --fast)."
             )
-        with tempfile.TemporaryDirectory() as tmp:  # pragma: no cover - GPU host
+        with tempfile.TemporaryDirectory() as tmp:  # pragma: no cover - heavy external tool
             tmpdir = Path(tmp)
             nifti = tmpdir / "ct.nii.gz"
             dicom_series_to_nifti(ct_instances, nifti)
             outdir = tmpdir / "seg"
             cmd = [binary, "-i", str(nifti), "-o", str(outdir), "--statistics"]
+            if self.fast:
+                cmd.append("--fast")
             if self.roi_subset:
                 cmd += ["--roi_subset", *self.roi_subset]
-            logger.info("Running TotalSegmentator (%d ROIs)", len(self.roi_subset))
+            logger.info(
+                "Running TotalSegmentator (fast=%s, %d ROIs)", self.fast, len(self.roi_subset)
+            )
             subprocess.run(cmd, check=True, capture_output=True, text=True)
             stats_path = outdir / "statistics.json"
             if not stats_path.is_file():
@@ -180,7 +198,7 @@ def get_segmenter() -> Segmenter:
     settings = get_settings()
     if settings.segmenter_backend.lower() == "totalsegmentator":
         roi_subset = [r.strip() for r in settings.segmenter_roi_subset.split(",") if r.strip()]
-        return TotalSegmentatorSegmenter(roi_subset=roi_subset)
+        return TotalSegmentatorSegmenter(roi_subset=roi_subset, fast=settings.segmenter_fast)
     return StubSegmenter()
 
 
