@@ -13,6 +13,7 @@ import zipfile
 from collections import defaultdict
 from dataclasses import dataclass
 
+import pydicom
 from pydicom import dcmread
 from pydicom.dataset import Dataset
 from pydicom.errors import InvalidDicomError
@@ -20,11 +21,20 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.crypto import encrypt_identity
+from app.core.logging import get_logger
 from app.models.enums import SeriesKind, StudyStatus
 from app.models.patient import PatientIdentity
 from app.models.study import Study, StudySeries
 from app.services.anonymization import Deidentifier
 from app.services.storage import ObjectStorage
+
+logger = get_logger(__name__)
+
+# Real-world DICOM (GE / Siemens exports, etc.) can carry private elements with a
+# non-standard length or value. Tolerate them (convert to UN, warn instead of raise)
+# rather than aborting the whole upload — only synthetic test files are spec-perfect.
+pydicom.config.convert_wrong_length_to_UN = True
+pydicom.config.settings.reading_validation_mode = pydicom.config.WARN
 
 # DICOM Modality → our CT/SPECT classification.
 _CT_MODALITIES = {"CT"}
@@ -85,6 +95,21 @@ def _to_bytes(ds: Dataset) -> bytes:
     buffer = io.BytesIO()
     ds.save_as(buffer, enforce_file_format=True)
     return buffer.getvalue()
+
+
+def _strip_group_lengths(ds: Dataset) -> None:
+    """Remove deprecated group-length elements (element 0x0000).
+
+    Some vendors emit these malformed; they are obsolete and pydicom recomputes
+    lengths on write anyway, so removing them avoids write failures. Recurses into
+    sequences.
+    """
+    for tag in [elem.tag for elem in ds if elem.tag.element == 0x0000]:
+        del ds[tag]
+    for elem in ds:
+        if elem.VR == "SQ" and elem.value:
+            for item in elem.value:
+                _strip_group_lengths(item)
 
 
 def _store_identity_if_absent(
@@ -151,11 +176,31 @@ def ingest_study(
             result.skipped += len(instances)
             continue
 
-        cleaned = [deid.deidentify(ds) for ds in instances]
+        cleaned: list[Dataset] = []
+        for ds in instances:
+            try:
+                cleaned.append(deid.deidentify(ds))
+            except Exception:  # a single malformed instance must not abort the batch
+                logger.exception("De-identification failed for an instance; skipping it")
+                result.skipped += 1
+        if not cleaned:
+            continue
         new_series_uid = str(getattr(cleaned[0], "SeriesInstanceUID", "") or "series")
         prefix = f"studies/{study.id}/{kind.value}/{new_series_uid}"
-        for index, cds in enumerate(cleaned):
-            storage.save_bytes(f"{prefix}/{index:04d}.dcm", _to_bytes(cds))
+        stored = 0
+        for cds in cleaned:
+            _strip_group_lengths(cds)
+            try:
+                blob = _to_bytes(cds)
+            except Exception:  # unwritable vendor quirk — skip this instance, keep the rest
+                logger.exception("Failed to serialize a de-identified instance; skipping it")
+                result.skipped += 1
+                continue
+            # ``stored`` (not the loop index) keeps the on-disk files contiguous 0000..N.
+            storage.save_bytes(f"{prefix}/{stored:04d}.dcm", blob)
+            stored += 1
+        if stored == 0:
+            continue
 
         db.add(
             StudySeries(
@@ -165,11 +210,11 @@ def ingest_study(
                 anonymized=True,
                 series_metadata={
                     "modality": str(getattr(instances[0], "Modality", "") or ""),
-                    "instances": len(cleaned),
+                    "instances": stored,
                 },
             )
         )
-        result.instances += len(cleaned)
+        result.instances += stored
         if kind is SeriesKind.ct:
             result.ct_series += 1
         else:

@@ -26,6 +26,11 @@ dependencies = [
     "numpy>=1.26,<3.0",
     # Server-side frame rendering (PNG) for the lightweight viewer.
     "pillow>=10.0",
+    # Decoders for compressed DICOM transfer syntaxes (JPEG Lossless / JPEG 2000)
+    # used by real hospital exports; synthetic test files are uncompressed.
+    "pylibjpeg>=2.0",
+    "pylibjpeg-libjpeg>=2.1",
+    "pylibjpeg-openjpeg>=2.0",
     # Application-level encryption (patient re-identification table) + auth.
     "cryptography>=42.0",
     "argon2-cffi>=23.1",
